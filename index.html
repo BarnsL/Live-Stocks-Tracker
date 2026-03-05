@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowLens - Order Flow Viewer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="kicker">Order Flow Dashboard</p>
+          <h1>FlowLens</h1>
+        </div>
+        <div class="controls">
+          <label for="interval">Interval</label>
+          <select id="interval">
+            <option value="1m">1 min</option>
+            <option value="5m" selected>5 min</option>
+            <option value="15m">15 min</option>
+            <option value="1h">1 hour</option>
+            <option value="1d">1 day</option>
+          </select>
+          <label for="poll">Auto</label>
+          <select id="poll">
+            <option value="0">Off</option>
+            <option value="5" selected>5s</option>
+            <option value="10">10s</option>
+            <option value="30">30s</option>
+            <option value="60">60s</option>
+          </select>
+          <button id="refresh" type="button">Refresh</button>
+          <span id="poll-indicator" class="poll-dot" title="Auto-refresh active"></span>
+        </div>
+      </header>
+
+      <section class="search-bar">
+        <div class="search-box">
+          <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+          <input id="symbol" type="text" value="AAPL" placeholder="Search stocks, ETFs, indices…" autocomplete="off" spellcheck="false" />
+          <kbd class="search-hint">Enter</kbd>
+        </div>
+        <div id="search-results" class="search-results"></div>
+      </section>
+
+      <section class="chart-panel">
+        <div id="chart" class="chart"></div>
+      </section>
+
+      <section class="notes">
+        <p>
+          Each candle body is <strong>bicolor</strong> — the green portion
+          represents estimated buy pressure, the orange portion represents
+          sell pressure, proportional within that period. Volume bars below
+          are stacked the same way. Real data via Yahoo Finance (yfinance).
+          For true aggressor-side volume, connect a trade-level feed
+          (Polygon, Alpaca, Databento).
+        </p>
+      </section>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
