@@ -152,7 +152,7 @@ function buildOption(symbol, interval, bars) {
     animation: true,
     animationDuration: 500,
     title: {
-      text: `${symbol} · ${interval}  —  Bicolor Order Flow`,
+      text: `${symbol} · ${interval}  —  Binomial Volume Candles`,
       left: 14, top: 8,
       textStyle: { fontFamily: "Space Grotesk, sans-serif", fontWeight: 600, fontSize: 14, color: "#1d2218" },
     },
