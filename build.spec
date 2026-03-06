@@ -1,4 +1,4 @@
-# build.spec — PyInstaller spec for FlowLens
+# build.spec — PyInstaller spec for LiveStocksTracker
 # Run: pyinstaller build.spec
 
 import os
@@ -51,7 +51,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="FlowLens",
+    name="LiveStocksTracker",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

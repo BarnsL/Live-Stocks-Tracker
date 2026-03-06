@@ -204,7 +204,7 @@ if __name__ == "__main__":
     srv = http.server.HTTPServer(("127.0.0.1", port), Handler)
 
     url = f"http://localhost:{port}"
-    print(f"FlowLens server → {url}")
+    print(f"Live Stocks Tracker server → {url}")
     print("Press Ctrl+C to stop.\n")
 
     # Auto-open browser after a short delay
