@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 # Live Stocks Tracker — Linux launcher
-# Usage: chmod +x run-linux.sh && ./run-linux.sh
-
 set -e
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 
 if ! command -v python3 &>/dev/null; then
   echo "Python 3 is required. Install with: sudo apt install python3 python3-venv python3-pip"
