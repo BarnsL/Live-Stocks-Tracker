@@ -295,6 +295,7 @@ render();
 setupPoll();
 
 /* ── Claude Chat ──────────────────────────────────── */
+
 const chatToggle = document.getElementById("chat-toggle");
 const chatPanel = document.getElementById("chat-panel");
 const chatClose = document.getElementById("chat-close");
@@ -304,6 +305,11 @@ const chatSend = document.getElementById("chat-send");
 const chatKeyBanner = document.getElementById("chat-key-banner");
 const claudeKeyInput = document.getElementById("claude-key");
 const saveKeyBtn = document.getElementById("save-key");
+const chatImageBtn = document.getElementById("chat-image-btn");
+const chatImageUpload = document.getElementById("chat-image-upload");
+const chatImagePreview = document.getElementById("chat-image-preview");
+
+let chatImages = [];
 
 let chatHistory = [];
 
@@ -345,6 +351,43 @@ saveKeyBtn.addEventListener("click", async () => {
 });
 
 chatSend.addEventListener("click", sendChat);
+chatImageBtn.addEventListener("click", () => {
+  chatImageUpload.click();
+});
+
+chatImageUpload.addEventListener("change", (e) => {
+  const files = Array.from(e.target.files);
+  if (files.length + chatImages.length > 5) {
+    alert("You can upload up to 5 images per message.");
+    return;
+  }
+  for (const file of files) {
+    if (!file.type.startsWith("image/")) continue;
+    if (file.size > 50 * 1024 * 1024) {
+      alert(`Image ${file.name} is too large (max 50MB).`);
+      continue;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      chatImages.push({ name: file.name, data: ev.target.result });
+      renderImagePreview();
+    };
+    reader.readAsDataURL(file);
+  }
+  chatImageUpload.value = "";
+});
+
+function renderImagePreview() {
+  chatImagePreview.innerHTML = chatImages.map((img, i) =>
+    `<div class="img-thumb"><img src="${img.data}" alt="img"/><button type="button" data-idx="${i}" title="Remove">&times;</button></div>`
+  ).join("");
+  chatImagePreview.querySelectorAll("button").forEach(btn => {
+    btn.onclick = () => {
+      chatImages.splice(parseInt(btn.dataset.idx), 1);
+      renderImagePreview();
+    };
+  });
+}
 chatInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
@@ -375,13 +418,21 @@ function renderMarkdown(text) {
 }
 
 async function sendChat() {
+
   const text = chatInput.value.trim();
-  if (!text) return;
+  if (!text && chatImages.length === 0) return;
 
   chatInput.value = "";
-  appendMsg("user", text);
-  chatHistory.push({ role: "user", content: text });
+  if (text) appendMsg("user", text);
+  if (chatImages.length) {
+    for (const img of chatImages) {
+      appendMsg("user", `[Image: ${img.name}]`);
+    }
+  }
+  chatHistory.push({ role: "user", content: text, images: chatImages.map(img => ({ name: img.name })) });
 
+  // Prepare messages for backend: strip 'images' property (Claude API does not allow extra fields)
+  const safeMessages = chatHistory.map(({ role, content }) => ({ role, content }));
   // Show typing indicator
   const typing = document.createElement("div");
   typing.className = "chat-msg chat-typing";
@@ -399,15 +450,38 @@ async function sendChat() {
     const intv = intervalInput.value;
     const chartState = `Symbol: ${sym}, Interval: ${intv}, Chart size: ${chartNode.offsetWidth}x${chartNode.offsetHeight}`;
 
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages: chatHistory,
-        appSource,
-        chartState,
-      }),
-    });
+
+    // Send as FormData if images, else JSON
+    let res;
+    if (chatImages.length) {
+      const form = new FormData();
+      form.append("messages", JSON.stringify(safeMessages));
+      form.append("appSource", appSource);
+      form.append("chartState", chartState);
+      chatImages.forEach((img, i) => {
+        // DataURL to Blob
+        const arr = img.data.split(",");
+        const mime = arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) u8arr[n] = bstr.charCodeAt(n);
+        form.append("image" + i, new Blob([u8arr], { type: mime }), img.name);
+      });
+      res = await fetch("/api/chat", { method: "POST", body: form });
+    } else {
+      res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: safeMessages,
+          appSource,
+          chartState,
+        }),
+      });
+    }
+    chatImages = [];
+    renderImagePreview();
 
     typing.remove();
     const data = await res.json();
@@ -430,6 +504,10 @@ async function sendChat() {
           // Show the explanation (text before/after the JSON block)
           const explanation = reply.replace(/```json\s*\n\{[\s\S]*?\}\s*\n```/, "").trim();
           if (explanation) appendMsg("assistant", explanation);
+
+          // Debug: log the code to be executed
+          console.log("[Claude EXECUTE]", action.code);
+          appendMsg("system", "[Debug] Executing code: " + action.code);
 
           // Execute the code
           try {
