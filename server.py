@@ -11,6 +11,7 @@ import urllib.parse
 import webbrowser
 from datetime import timezone, timedelta
 
+import anthropic
 import yfinance as yf
 
 # Pacific Time: UTC-8 (PST) — fixed offset for display consistency
@@ -48,6 +49,27 @@ CACHE_TTL = {
 # Search results cache
 _search_cache = {}
 
+# Claude API key storage
+_CLAUDE_KEY_FILE = os.path.join(
+    os.environ.get("APPDATA", os.path.expanduser("~")),
+    "LiveStocksTracker",
+    "claude_key.txt",
+)
+
+
+def _load_claude_key() -> str:
+    try:
+        with open(_CLAUDE_KEY_FILE, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def _save_claude_key(key: str):
+    os.makedirs(os.path.dirname(_CLAUDE_KEY_FILE), exist_ok=True)
+    with open(_CLAUDE_KEY_FILE, "w", encoding="utf-8") as f:
+        f.write(key.strip())
+
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -56,8 +78,84 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._handle_bars(parsed)
         elif parsed.path == "/api/search":
             self._handle_search(parsed)
+        elif parsed.path == "/api/key-status":
+            self._json_response(200, {"has_key": bool(_load_claude_key())})
         else:
             super().do_GET()
+
+    def do_POST(self):
+        parsed = urllib.parse.urlparse(self.path)
+        content_len = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_len) if content_len else b""
+        if parsed.path == "/api/chat":
+            self._handle_chat(body)
+        elif parsed.path == "/api/save-key":
+            self._handle_save_key(body)
+        else:
+            self.send_error(404)
+
+    def _handle_save_key(self, body):
+        try:
+            data = json.loads(body)
+            key = data.get("key", "").strip()
+            if not key.startswith("sk-"):
+                self._json_response(400, {"error": "Invalid key format"})
+                return
+            _save_claude_key(key)
+            self._json_response(200, {"ok": True})
+        except Exception as exc:
+            self._json_response(500, {"error": str(exc)})
+
+    def _handle_chat(self, body):
+        try:
+            data = json.loads(body)
+            messages = data.get("messages", [])
+            app_source = data.get("appSource", "")
+            chart_state = data.get("chartState", "")
+
+            api_key = _load_claude_key()
+            if not api_key:
+                self._json_response(401, {"error": "No API key configured"})
+                return
+
+            system_prompt = (
+                "You are an expert assistant embedded in a live stock charting app "
+                "(ECharts 5, vanilla JS, Python backend with yfinance). The user can "
+                "ask you to modify the chart, add indicators, change colors, add "
+                "features, or explain the code.\n\n"
+                "When the user asks for a code change, return a JSON block wrapped in "
+                "```json\\n{...}\\n``` with this schema:\n"
+                '{"action":"execute","code":"<JavaScript to eval in browser>"}\n\n'
+                "The code runs in the page context. Available globals:\n"
+                "- chart (ECharts instance)\n"
+                "- buildOption(symbol, interval, bars) → option object\n"
+                "- render(silent?) → re-fetches and redraws\n"
+                "- BUY, SELL (color constants)\n"
+                "- symbolInput, intervalInput, pollSelect (DOM inputs)\n"
+                "- echarts (the library)\n\n"
+                "You can call chart.setOption({...}, false) to merge new options, "
+                "or override functions, or add event listeners.\n\n"
+                "If the user just asks a question (no code change needed), respond "
+                "normally in markdown without a JSON block.\n\n"
+                "CURRENT APP.JS SOURCE:\n```javascript\n" + app_source + "\n```\n\n"
+                "CURRENT CHART STATE:\n" + chart_state
+            )
+
+            client = anthropic.Anthropic(api_key=api_key)
+            resp = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=4096,
+                system=system_prompt,
+                messages=messages,
+            )
+
+            reply = resp.content[0].text if resp.content else ""
+            self._json_response(200, {"reply": reply})
+
+        except anthropic.AuthenticationError:
+            self._json_response(401, {"error": "Invalid API key"})
+        except Exception as exc:
+            self._json_response(500, {"error": str(exc)})
 
     def end_headers(self):
         self.send_header("X-Content-Type-Options", "nosniff")
