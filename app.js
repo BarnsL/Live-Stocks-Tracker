@@ -1,3 +1,10 @@
+// ── Dark Mode Helpers ──
+function enableDarkMode() {
+  document.body.classList.add('dark');
+}
+function disableDarkMode() {
+  document.body.classList.remove('dark');
+}
 /* ── constants ── */
 const BUY = "#0d8a57";
 const SELL = "#ca5a18";
@@ -511,10 +518,17 @@ async function sendChat() {
 
           // Execute the code
           try {
-            const fn = new Function("chart", "echarts", "buildOption", "render",
+            const fn = new Function(
+              "chart", "echarts", "buildOption", "render",
               "BUY", "SELL", "symbolInput", "intervalInput", "pollSelect", "chartNode",
-              action.code);
-            fn(chart, echarts, buildOption, render, BUY, SELL, symbolInput, intervalInput, pollSelect, chartNode);
+              "enableDarkMode", "disableDarkMode",
+              action.code
+            );
+            fn(
+              chart, echarts, buildOption, render,
+              BUY, SELL, symbolInput, intervalInput, pollSelect, chartNode,
+              enableDarkMode, disableDarkMode
+            );
             appendMsg("executed", "Code executed successfully.");
           } catch (execErr) {
             appendMsg("system", "Execution error: " + execErr.message);
