@@ -1,3 +1,91 @@
+/* ── Dark Mode Overrides ─────────────────────────────── */
+body.dark {
+  --bg-0: #181a1b;
+  --bg-1: #23272a;
+  --card: rgba(32, 34, 37, 0.92);
+  --ink: #e0e0e0;
+  --muted: #b0b0b0;
+  --line: rgba(255,255,255,0.08);
+  background: #181a1b !important;
+  color: #e0e0e0 !important;
+}
+
+body.dark .app-shell {
+  background: var(--card) !important;
+  color: var(--ink) !important;
+  border-color: var(--line) !important;
+  box-shadow: 0 28px 70px rgba(0,0,0,0.34);
+}
+
+body.dark .topbar,
+body.dark .controls,
+body.dark .search-bar,
+body.dark .search-box,
+body.dark .search-results,
+body.dark .chart-panel,
+body.dark .notes,
+body.dark .chat-panel,
+body.dark .chat-header,
+body.dark .chat-key-banner,
+body.dark .chat-messages,
+body.dark .chat-input-row,
+body.dark .img-thumb {
+  background: #23272a !important;
+  color: #e0e0e0 !important;
+  border-color: #444 !important;
+}
+
+body.dark .search-box input[type="text"],
+body.dark input[type="text"],
+body.dark select,
+body.dark button,
+body.dark textarea {
+  background: #23272a !important;
+  color: #e0e0e0 !important;
+  border-color: #555 !important;
+}
+
+body.dark .search-item,
+body.dark .search-item .name {
+  color: #e0e0e0 !important;
+}
+
+body.dark .search-item:hover,
+body.dark .search-item.active {
+  background: #333 !important;
+}
+
+body.dark .chart {
+  background: #181a1b !important;
+}
+
+body.dark .chat-msg.user {
+  background: #23272a !important;
+  color: #e0e0e0 !important;
+}
+body.dark .chat-msg.assistant {
+  background: #23272a !important;
+  color: #b0ffb0 !important;
+}
+body.dark .chat-msg.system {
+  background: #333 !important;
+  color: #ffb080 !important;
+}
+body.dark .chat-msg.executed {
+  background: #1a3a1a !important;
+  color: #b0ffb0 !important;
+}
+body.dark .chat-typing {
+  color: #b0b0b0 !important;
+}
+body.dark .img-thumb {
+  background: #23272a !important;
+  border-color: #444 !important;
+}
+body.dark .img-thumb button {
+  background: #444 !important;
+  color: #fff !important;
+}
 :root {
   --bg-0: #f3efe4;
   --bg-1: #e7dfce;

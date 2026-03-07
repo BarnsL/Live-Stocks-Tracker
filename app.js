@@ -6,10 +6,10 @@ function disableDarkMode() {
   document.body.classList.remove('dark');
 }
 /* ── constants ── */
-const BUY = "#0d8a57";
-const SELL = "#ca5a18";
-const BUY_WICK = "#0f774d";
-const SELL_WICK = "#a83a20";
+let BUY = "#0d8a57";
+let SELL = "#ca5a18";
+let BUY_WICK = "#0f774d";
+let SELL_WICK = "#a83a20";
 
 /* ── DOM refs ── */
 const chartNode = document.getElementById("chart");
@@ -20,6 +20,24 @@ const pollSelect = document.getElementById("poll");
 const pollDot = document.getElementById("poll-indicator");
 const searchResults = document.getElementById("search-results");
 const chart = echarts.init(chartNode);
+
+/* ── Safe UI helper functions (available to chatbot-executed code) ── */
+function setCSSVar(name, value) {
+  try { document.documentElement.style.setProperty(name, value); } catch (e) { console.warn('setCSSVar failed', e); }
+}
+
+function setStyle(selector, prop, value) {
+  try { document.querySelectorAll(selector).forEach(el => el.style.setProperty(prop, value)); } catch (e) { console.warn('setStyle failed', e); }
+}
+
+function setThemeColors({ buy, sell, buyWick, sellWick } = {}) {
+  if (buy) BUY = buy;
+  if (sell) SELL = sell;
+  if (buyWick) BUY_WICK = buyWick;
+  if (sellWick) SELL_WICK = sellWick;
+  // Re-render the chart in-place; use silent render to avoid spinner
+  try { render(true); } catch (e) { console.warn('setThemeColors render failed', e); }
+}
 
 /* ── symbol search ── */
 let searchTimeout = null;
@@ -255,6 +273,21 @@ function buildOption(symbol, interval, bars) {
   };
 }
 
+// Expose mutable buildOption to allow chatbot to replace it at runtime.
+window.buildOption = buildOption;
+
+function setBuildOption(fn) {
+  try {
+    if (typeof fn === 'function') {
+      window.buildOption = fn;
+      // re-render with new builder
+      try { render(true); } catch (e) { console.warn('setBuildOption render failed', e); }
+      return true;
+    }
+  } catch (e) { console.warn('setBuildOption failed', e); }
+  return false;
+}
+
 /* ── render is defined below with poll support ── */
 
 refreshButton.addEventListener("click", render);
@@ -287,7 +320,8 @@ async function render(silent) {
     const bars = await fetchBars(symbol, interval);
     if (!silent) chart.hideLoading();
     if (bars.length) {
-      chart.setOption(buildOption(symbol, interval, bars), true);
+      const optionBuilder = window.buildOption || buildOption;
+      chart.setOption(optionBuilder(symbol, interval, bars), true);
     } else {
       if (!silent) chart.hideLoading();
       console.warn("No data returned for", symbol);
@@ -522,12 +556,14 @@ async function sendChat() {
               "chart", "echarts", "buildOption", "render",
               "BUY", "SELL", "symbolInput", "intervalInput", "pollSelect", "chartNode",
               "enableDarkMode", "disableDarkMode",
+              "document", "window", "setCSSVar", "setStyle", "setThemeColors",
               action.code
             );
             fn(
               chart, echarts, buildOption, render,
               BUY, SELL, symbolInput, intervalInput, pollSelect, chartNode,
-              enableDarkMode, disableDarkMode
+              enableDarkMode, disableDarkMode,
+              document, window, setCSSVar, setStyle, setThemeColors
             );
             appendMsg("executed", "Code executed successfully.");
           } catch (execErr) {
