@@ -67,6 +67,52 @@
       </section>
     </main>
 
+    <!-- Claude Chat Panel -->
+    <div id="chat-toggle" class="chat-toggle" title="Claude AI Assistant">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+    </div>
+
+    <aside id="chat-panel" class="chat-panel">
+      <div class="chat-header">
+        <span class="chat-title">Claude AI</span>
+        <button id="chat-close" class="chat-close" title="Close">&times;</button>
+      </div>
+      <div id="chat-key-banner" class="chat-key-banner">
+        <p>Enter your Anthropic API key to start:</p>
+        <div class="chat-instructions key-steps">
+          <p class="instructions-title">How to get your API key</p>
+          <ol>
+            <li>Go to <strong>console.anthropic.com</strong></li>
+            <li>Sign in or create an account</li>
+            <li>Navigate to <strong>API Keys</strong> in the sidebar</li>
+            <li>Click <strong>Create Key</strong> and copy it</li>
+            <li>Paste it below and click Save</li>
+          </ol>
+        </div>
+        <div class="key-input-row">
+          <input id="claude-key" type="password" placeholder="sk-ant-..." spellcheck="false" />
+          <button id="save-key">Save</button>
+        </div>
+        <div class="chat-instructions">
+          <p class="instructions-title">What you can do</p>
+          <ul>
+            <li>Ask Claude to modify the chart — e.g. <em>"add a 20-period moving average"</em></li>
+            <li>Change visuals — <em>"make candles blue and red"</em></li>
+            <li>Add indicators — <em>"add Bollinger bands"</em></li>
+            <li>Ask questions — <em>"what does buy ratio mean?"</em></li>
+          </ul>
+          <p class="instructions-note">Claude can read the full app source and execute JavaScript live in the browser.</p>
+        </div>
+      </div>
+      <div id="chat-messages" class="chat-messages"></div>
+      <div class="chat-input-row">
+        <textarea id="chat-input" placeholder="Ask Claude to modify the chart…" rows="2"></textarea>
+        <button id="chat-send" title="Send">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+    </aside>
+
     <script type="module" src="./app.js"></script>
   </body>
 </html>
