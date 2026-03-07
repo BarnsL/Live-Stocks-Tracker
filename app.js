@@ -293,3 +293,165 @@ async function render(silent) {
 
 render();
 setupPoll();
+
+/* ── Claude Chat ──────────────────────────────────── */
+const chatToggle = document.getElementById("chat-toggle");
+const chatPanel = document.getElementById("chat-panel");
+const chatClose = document.getElementById("chat-close");
+const chatMessages = document.getElementById("chat-messages");
+const chatInput = document.getElementById("chat-input");
+const chatSend = document.getElementById("chat-send");
+const chatKeyBanner = document.getElementById("chat-key-banner");
+const claudeKeyInput = document.getElementById("claude-key");
+const saveKeyBtn = document.getElementById("save-key");
+
+let chatHistory = [];
+
+// Check if API key exists on load
+fetch("/api/key-status").then(r => r.json()).then(d => {
+  if (d.has_key) chatKeyBanner.classList.add("hidden");
+}).catch(() => {});
+
+chatToggle.addEventListener("click", () => {
+  chatPanel.classList.add("open");
+  chatToggle.classList.add("hidden");
+  chatInput.focus();
+});
+
+chatClose.addEventListener("click", () => {
+  chatPanel.classList.remove("open");
+  chatToggle.classList.remove("hidden");
+});
+
+saveKeyBtn.addEventListener("click", async () => {
+  const key = claudeKeyInput.value.trim();
+  if (!key) return;
+  try {
+    const res = await fetch("/api/save-key", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      chatKeyBanner.classList.add("hidden");
+      appendMsg("system", "API key saved.");
+    } else {
+      appendMsg("system", data.error || "Failed to save key");
+    }
+  } catch (e) {
+    appendMsg("system", "Error saving key: " + e.message);
+  }
+});
+
+chatSend.addEventListener("click", sendChat);
+chatInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendChat();
+  }
+});
+
+function appendMsg(role, text) {
+  const div = document.createElement("div");
+  div.className = `chat-msg ${role}`;
+  if (role === "assistant") {
+    div.innerHTML = renderMarkdown(text);
+  } else {
+    div.textContent = text;
+  }
+  chatMessages.appendChild(div);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  return div;
+}
+
+function renderMarkdown(text) {
+  // Minimal markdown: code blocks, inline code, bold, newlines
+  return text
+    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br>');
+}
+
+async function sendChat() {
+  const text = chatInput.value.trim();
+  if (!text) return;
+
+  chatInput.value = "";
+  appendMsg("user", text);
+  chatHistory.push({ role: "user", content: text });
+
+  // Show typing indicator
+  const typing = document.createElement("div");
+  typing.className = "chat-msg chat-typing";
+  typing.textContent = "Claude is thinking…";
+  chatMessages.appendChild(typing);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+
+  try {
+    // Get current app.js source for context
+    const srcRes = await fetch("/app.js");
+    const appSource = await srcRes.text();
+
+    // Current chart state
+    const sym = symbolInput.value.trim().toUpperCase() || "AAPL";
+    const intv = intervalInput.value;
+    const chartState = `Symbol: ${sym}, Interval: ${intv}, Chart size: ${chartNode.offsetWidth}x${chartNode.offsetHeight}`;
+
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: chatHistory,
+        appSource,
+        chartState,
+      }),
+    });
+
+    typing.remove();
+    const data = await res.json();
+
+    if (data.error) {
+      appendMsg("system", data.error);
+      chatHistory.pop(); // remove failed user msg
+      return;
+    }
+
+    const reply = data.reply;
+    chatHistory.push({ role: "assistant", content: reply });
+
+    // Check for executable code block
+    const codeMatch = reply.match(/```json\s*\n(\{[\s\S]*?\})\s*\n```/);
+    if (codeMatch) {
+      try {
+        const action = JSON.parse(codeMatch[1]);
+        if (action.action === "execute" && action.code) {
+          // Show the explanation (text before/after the JSON block)
+          const explanation = reply.replace(/```json\s*\n\{[\s\S]*?\}\s*\n```/, "").trim();
+          if (explanation) appendMsg("assistant", explanation);
+
+          // Execute the code
+          try {
+            const fn = new Function("chart", "echarts", "buildOption", "render",
+              "BUY", "SELL", "symbolInput", "intervalInput", "pollSelect", "chartNode",
+              action.code);
+            fn(chart, echarts, buildOption, render, BUY, SELL, symbolInput, intervalInput, pollSelect, chartNode);
+            appendMsg("executed", "Code executed successfully.");
+          } catch (execErr) {
+            appendMsg("system", "Execution error: " + execErr.message);
+          }
+          return;
+        }
+      } catch { /* not valid JSON, show as normal reply */ }
+    }
+
+    // Normal text reply
+    appendMsg("assistant", reply);
+
+  } catch (err) {
+    typing.remove();
+    appendMsg("system", "Error: " + err.message);
+    chatHistory.pop();
+  }
+}
