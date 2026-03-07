@@ -106,10 +106,15 @@
       </div>
       <div id="chat-messages" class="chat-messages"></div>
       <div class="chat-input-row">
+        <input id="chat-image-upload" type="file" accept="image/*" multiple style="display:none" />
+        <button id="chat-image-btn" title="Attach image" type="button">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="2.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        </button>
         <textarea id="chat-input" placeholder="Ask Claude to modify the chart…" rows="2"></textarea>
         <button id="chat-send" title="Send">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
+        <div id="chat-image-preview" class="chat-image-preview"></div>
       </div>
     </aside>
 
