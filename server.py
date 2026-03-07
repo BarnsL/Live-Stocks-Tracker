@@ -72,6 +72,54 @@ def _save_claude_key(key: str):
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
+    def _handle_chat_core(self, messages, app_source, chart_state, images=None):
+        api_key = _load_claude_key()
+        if not api_key:
+            self._json_response(401, {"error": "No API key configured"})
+            return
+
+        system_prompt = (
+            "You are an expert assistant embedded in a live stock charting app "
+            "(ECharts 5, vanilla JS, Python backend with yfinance). The user can "
+            "ask you to modify the chart, add indicators, change colors, add "
+            "features, or explain the code.\n\n"
+            "When the user asks for a code change, return a JSON block wrapped in "
+            "```json\\n{...}\\n``` with this schema:\n"
+            '{"action":"execute","code":"<JavaScript to eval in browser>"}'
+            "\n\nThe code runs in the page context. Available globals:\n"
+            "- chart (ECharts instance)\n"
+            "- buildOption(symbol, interval, bars) → option object\n"
+            "- render(silent?) → re-fetches and redraws\n"
+            "- BUY, SELL (color constants)\n"
+            "- symbolInput, intervalInput, pollSelect (DOM inputs)\n"
+            "- echarts (the library)\n\n"
+            "You can call chart.setOption({...}, false) to merge new options, "
+            "or override functions, or add event listeners.\n\n"
+            "If the user just asks a question (no code change needed), respond "
+            "normally in markdown without a JSON block.\n\n"
+            "CURRENT APP.JS SOURCE:\n```javascript\n" + app_source + "\n```\n\n"
+            "CURRENT CHART STATE:\n" + chart_state
+        )
+
+        # Optionally, include image info in the prompt if images are present
+        if images:
+            system_prompt += ("\n\nThe user has uploaded screenshots. "
+                              "You may reference them as needed, but you cannot see their content directly.")
+
+        try:
+            client = anthropic.Anthropic(api_key=api_key)
+            resp = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=4096,
+                system=system_prompt,
+                messages=messages,
+            )
+            reply = resp.content[0].text if resp.content else ""
+            self._json_response(200, {"reply": reply})
+        except anthropic.AuthenticationError:
+            self._json_response(401, {"error": "Invalid API key"})
+        except Exception as exc:
+            self._json_response(500, {"error": str(exc)})
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/api/bars":
@@ -94,6 +142,53 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         else:
             self.send_error(404)
 
+    def _handle_chat(self, body):
+        content_type = self.headers.get("Content-Type", "")
+        if content_type.startswith("multipart/form-data"):
+            # Handle multipart (with images)
+            self._handle_chat_multipart(content_type, body)
+        else:
+            # Handle regular JSON
+            try:
+                data = json.loads(body)
+                messages = data.get("messages", [])
+                app_source = data.get("appSource", "")
+                chart_state = data.get("chartState", "")
+            except Exception as exc:
+                self._json_response(400, {"error": f"Invalid JSON: {exc}"})
+                return
+            self._handle_chat_core(messages, app_source, chart_state, images=None)
+
+    def _handle_chat_multipart(self, content_type, body):
+        import email
+        from io import BytesIO
+        msg = email.message_from_bytes(b"Content-Type: " + content_type.encode() + b"\r\n\r\n" + body)
+        fields = {}
+        images = []
+        for part in msg.walk():
+            if part.get_content_maintype() == "multipart":
+                continue
+            name = part.get_param('name', header='content-disposition')
+            if name is None:
+                continue
+            if name.startswith("image"):
+                images.append({
+                    "filename": part.get_filename(),
+                    "content_type": part.get_content_type(),
+                    "data": part.get_payload(decode=True)
+                })
+            else:
+                fields[name] = part.get_payload(decode=True)
+        # messages, appSource, chartState
+        try:
+            messages = json.loads(fields.get("messages", b"[]").decode("utf-8"))
+            app_source = fields.get("appSource", b"").decode("utf-8")
+            chart_state = fields.get("chartState", b"").decode("utf-8")
+        except Exception as exc:
+            self._json_response(400, {"error": f"Invalid form fields: {exc}"})
+            return
+        self._handle_chat_core(messages, app_source, chart_state, images)
+
     def _handle_save_key(self, body):
         try:
             data = json.loads(body)
@@ -105,13 +200,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._json_response(200, {"ok": True})
         except Exception as exc:
             self._json_response(500, {"error": str(exc)})
-
-    def _handle_chat(self, body):
-        try:
-            data = json.loads(body)
-            messages = data.get("messages", [])
-            app_source = data.get("appSource", "")
-            chart_state = data.get("chartState", "")
 
             api_key = _load_claude_key()
             if not api_key:
