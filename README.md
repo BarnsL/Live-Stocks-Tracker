@@ -1,6 +1,8 @@
 Live Stocks Tracker
 ===================
 
+Version: 2.1 — patch: assistant-driven chart-type toggle (candles ↔ line)
+
 Lightweight local stock charting app using ECharts and yfinance with a chat-driven UI.
 
 Features
@@ -63,6 +65,16 @@ Developer notes
   - `requirements.txt` — Python dependencies used by the server.
 
 - To experiment with assistant-driven UI changes, use the demo (`?demo=1`) or open the browser console and call `window.runChatDemo()`.
+
+Building the v2.1 exe
+- Ensure your working tree includes this patch (updated `app.js`).
+- Build a new executable with PyInstaller using the provided spec:
+
+```powershell
+pyinstaller build_v2_1.spec
+```
+
+This produces `dist\LiveStocksTracker_v2.1` containing the patched exe. The original `build.spec` still builds the unversioned exe (v2.0 build name). The source changes are already included in both builds since `app.js` has been modified.
 
 Troubleshooting
 - If the assistant reports "No API key configured" save your Claude key in the chat panel or write the key to `%APPDATA%/LiveStocksTracker/claude_key.txt`.

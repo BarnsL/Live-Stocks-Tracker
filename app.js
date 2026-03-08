@@ -288,6 +288,47 @@ function setBuildOption(fn) {
   return false;
 }
 
+// Preserve original builder so we can restore candles
+window._originalBuildOption = buildOption;
+
+// Create a simple line-chart builder (uses close prices)
+function lineBuildOption(symbol, interval, bars) {
+  const times = bars.map(b => b.time);
+  const closes = bars.map(b => b.close);
+  return {
+    title: { text: `${symbol} · ${interval} — Close Price (Line)`, left: 14, top: 8 },
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'category', data: times, axisLine: { lineStyle: { color: '#a6ad9d' } } },
+    yAxis: { scale: true },
+    grid: { left: 62, right: 20, top: 56, bottom: 40 },
+    dataZoom: [{ type: 'inside' }, { type: 'slider', left: 62, right: 20, bottom: 10 }],
+    series: [
+      { name: 'Close', type: 'line', data: closes, smooth: false, showSymbol: false, lineStyle: { width: 2 }, areaStyle: {} },
+    ],
+  };
+}
+
+// Expose simple helpers for the chatbot to switch chart types safely
+function setChartType(type) {
+  if (type === 'line') {
+    setBuildOption(lineBuildOption);
+    return true;
+  }
+  if (type === 'candles') {
+    setBuildOption(window._originalBuildOption || buildOption);
+    return true;
+  }
+  return false;
+}
+
+function setChartToLine() { return setChartType('line'); }
+function setChartToCandles() { return setChartType('candles'); }
+
+// Make helpers available on window for executed assistant code
+window.setChartType = setChartType;
+window.setChartToLine = setChartToLine;
+window.setChartToCandles = setChartToCandles;
+
 /* ── render is defined below with poll support ── */
 
 refreshButton.addEventListener("click", render);
