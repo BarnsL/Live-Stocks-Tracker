@@ -89,6 +89,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             "\n\nThe code runs in the page context. Available globals:\n"
             "- chart (ECharts instance)\n"
             "- buildOption(symbol, interval, bars) → option object\n"
+            "- setBuildOption(fn) → replace the option builder at runtime\n"
+            "- setChartType(type) / setChartToLine() / setChartToCandles() → helpers to switch chart presentation\n"
             "- render(silent?) → re-fetches and redraws\n"
             "- BUY, SELL (color constants)\n"
             "- symbolInput, intervalInput, pollSelect (DOM inputs)\n"
@@ -390,7 +392,7 @@ if __name__ == "__main__":
     srv = http.server.HTTPServer(("127.0.0.1", port), Handler)
 
     url = f"http://localhost:{port}"
-    print(f"Live Stocks Tracker server → {url}")
+    print(f"Live Stocks Tracker server -> {url}")
     print("Press Ctrl+C to stop.\n")
 
     # Auto-open browser after a short delay
@@ -399,5 +401,5 @@ if __name__ == "__main__":
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
-        print("\nShutting down…")
+        print("\nShutting down...")
         srv.shutdown()
