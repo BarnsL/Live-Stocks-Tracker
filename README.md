@@ -17,6 +17,18 @@ Security & design notes
 - Assistant-sent code runs in the page context. The page exposes a limited set of helper globals (chart, `buildOption`, `render`, color constants, and safe DOM helpers). Review these helpers before enabling remote access.
 
 Quick start
+
+1. Simply run the .exe and a webpage on localhost will open up.
+   
+2. Create Key at https://platform.claude.com/settings/keys.
+
+3. Click on chat button at the lower right corner.
+
+4. Add API key to upper field in chat.
+   
+5. Chat with the LLM to customize features.
+
+Extended start
 1. Create and activate a Python 3.11+ virtualenv. Example (Windows PowerShell):
 
 ```powershell
