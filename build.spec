@@ -29,9 +29,9 @@ a = Analysis(
         ("index.html", "."),
         ("styles.css", "."),
         ("app.js", "."),
+        ("local_model.py", "."),
     ] + _extras_datas,
-    hiddenimports=[
-        "yfinance",
+    hiddenimports=[        "local_model",        "yfinance",
         "pandas",
         "numpy",
         "requests",
