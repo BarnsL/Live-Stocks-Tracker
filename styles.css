@@ -423,6 +423,17 @@ button:hover {
   opacity: 0.95;
 }
 
+#copy-logs-btn {
+  font-size: 0.72rem;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: #2a2d30;
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #aaa;
+  margin-left: 8px;
+}
+#copy-logs-btn:hover { color: #fff; border-color: rgba(255,255,255,0.3); }
+
 .chart-panel {
   margin-top: 14px;
   border: 1px solid var(--line);
