@@ -595,11 +595,27 @@ const _chartBuilders = {
 
 let _currentChartType = 'candles';
 
+const _chartTips = {
+  candles: 'Each candle body is <strong>bicolor</strong> — the green portion represents estimated buy pressure, the orange portion represents sell pressure, proportional within that period. Volume bars below are stacked the same way. Real data via Yahoo Finance (yfinance). For true aggressor-side volume, connect a trade-level feed (Polygon, Alpaca, Databento).',
+  line: '<strong>Line chart</strong> plots closing prices connected by a continuous line. Useful for spotting the overall trend direction at a glance. An upward slope signals bullish momentum; a downward slope signals bearish. Look for support and resistance levels where the line repeatedly bounces or stalls.',
+  area: '<strong>Area chart</strong> is a line chart with the region below filled in, making it easier to visualize the magnitude of price movement over time. The shaded area emphasizes cumulative gains or losses. Steeper fills indicate stronger momentum; flat areas suggest consolidation.',
+  ohlc: `<strong>OHLC candlesticks</strong> display Open, High, Low, and Close for each period as standard Japanese candlesticks. A filled green body means the close was above the open (bullish); orange means the close was below the open (bearish). The thin wicks extend to the period's high and low. Tall candle bodies indicate strong directional conviction; long wicks suggest rejection at those price levels.`,
+  heikinashi: '<strong>Heikin-Ashi</strong> candles use averaged values to smooth out noise: Open = average of previous HA open and close; Close = average of OHLC. Consecutive green candles with no lower wick indicate a strong uptrend. Consecutive red candles with no upper wick indicate a strong downtrend. Doji-like candles with long wicks signal potential reversals.',
+  mountain: '<strong>Mountain chart</strong> combines a closing-price line with a gradient fill that fades toward the bottom. It provides the same trend information as a line chart but with a more visual sense of depth. Best for quick trend assessment and presentations where simplicity is preferred.',
+  bar: `<strong>Bar chart</strong> displays each period's closing price as an individual vertical bar. Green bars mean the close was higher than the previous period; red bars mean it was lower. Clusters of green bars confirm upward momentum. Tall bars indicate large price moves relative to recent history.`,
+};
+
+function updateChartTips() {
+  const el = document.getElementById('chart-tips');
+  if (el && _chartTips[_currentChartType]) el.innerHTML = _chartTips[_currentChartType];
+}
+
 function setChartType(type) {
   const key = (type || '').toLowerCase().replace(/[^a-z]/g, '');
   const builder = _chartBuilders[key];
   if (!builder) return false;
   _currentChartType = key;
+  updateChartTips();
   setBuildOption(builder);
   return true;
 }
