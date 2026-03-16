@@ -1013,14 +1013,21 @@ function _extractCodeFromMessage(text) {
   return match ? match[1].trim() : "";
 }
 
-async function sendLocalChat(text) {
-  const code = _extractCodeFromMessage(text);
-  const instruction = text.replace(/```[\w]*\n[\s\S]*?```/g, "").trim();
+let localHistory = [];
 
-  if (!instruction && !code) {
+async function sendLocalChat(text) {
+  if (!text) {
     appendMsg("system", "Type a message or question.");
     return;
   }
+
+  const sym = symbolInput.value.trim().toUpperCase() || "AAPL";
+  const intv = intervalInput.value;
+  const tabs = getTabs();
+  const bmarks = getBookmarks();
+  const chartState = "Symbol: " + sym + ", Interval: " + intv + ", Chart size: " + chartNode.offsetWidth + "x" + chartNode.offsetHeight + ", Chart type: " + getChartType() + ", Tabs: [" + tabs.join(", ") + "], Active tab: " + getActiveTab() + " (#" + getActiveTabIndex() + "), Bookmarks: [" + bmarks.join(", ") + "]";
+
+  localHistory.push({ role: "user", content: text });
 
   const typing = document.createElement("div");
   typing.className = "chat-msg chat-typing";
@@ -1029,38 +1036,82 @@ async function sendLocalChat(text) {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 
   try {
-    let res;
-    if (code && instruction) {
-      // Code editing mode: instruction + code block
-      res = await fetch("/api/local-edit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instruction, code }),
-      });
-    } else {
-      // General chat mode: plain message
-      res = await fetch("/api/local-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
-      });
-    }
+    const res = await fetch("/api/local-chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: text,
+        chartState,
+        history: localHistory.slice(-10),
+      }),
+    });
     typing.remove();
     const data = await res.json();
 
-    if (data.ok) {
-      const durStr = data.duration ? " (" + data.duration.toFixed(1) + "s)" : "";
-      if (code && instruction) {
-        appendMsg("assistant", "Here is the edited code" + durStr + ":\n\n```\n" + data.result + "\n```");
-      } else {
-        appendMsg("assistant", data.result + durStr);
-      }
-    } else {
+    if (!data.ok) {
       appendMsg("system", data.error || "Local model request failed.");
+      localHistory.pop();
+      return;
     }
+
+    const reply = data.reply;
+    const durStr = data.duration ? " (" + data.duration.toFixed(1) + "s)" : "";
+    localHistory.push({ role: "assistant", content: reply });
+
+    // Check for executable code block (same as Claude)
+    const codeMatch = reply.match(/```json\s*\n(\{[\s\S]*?\})\s*\n```/);
+    if (codeMatch) {
+      try {
+        const action = JSON.parse(codeMatch[1]);
+        if (action.action === "execute" && action.code) {
+          const explanation = reply.replace(/```json\s*\n\{[\s\S]*?\}\s*\n```/, "").trim();
+          if (explanation) appendMsg("assistant", explanation + durStr);
+
+          console.log("[Local EXECUTE]", action.code);
+
+          try {
+            const fn = new Function(
+              "chart", "echarts", "buildOption", "render",
+              "BUY", "SELL", "symbolInput", "intervalInput", "pollSelect", "chartNode",
+              "enableDarkMode", "disableDarkMode",
+              "addTab", "removeTab", "closeAllTabs", "switchTab", "switchTabByIndex",
+              "getTabs", "getActiveTab", "getActiveTabIndex",
+              "addBookmark", "removeBookmark", "clearBookmarks", "getBookmarks", "isBookmarked",
+              "openSymbol", "setInterval_",
+              "setChartType", "getChartType", "listChartTypes",
+              "setChartToLine", "setChartToCandles", "setChartToArea", "setChartToOHLC",
+              "setChartToHeikinAshi", "setChartToMountain", "setChartToBar",
+              "setBuildOption", "workspaceState", "saveWorkspaceState", "renderWorkspaceUI",
+              action.code
+            );
+            fn(
+              chart, echarts, buildOption, render,
+              BUY, SELL, symbolInput, intervalInput, pollSelect, chartNode,
+              enableDarkMode, disableDarkMode,
+              addTab, removeTab, closeAllTabs, switchTab, switchTabByIndex,
+              getTabs, getActiveTab, getActiveTabIndex,
+              addBookmark, removeBookmark, clearBookmarks, getBookmarks, isBookmarked,
+              openSymbol, setInterval_,
+              setChartType, getChartType, listChartTypes,
+              setChartToLine, setChartToCandles, setChartToArea, setChartToOHLC,
+              setChartToHeikinAshi, setChartToMountain, setChartToBar,
+              setBuildOption, workspaceState, saveWorkspaceState, renderWorkspaceUI
+            );
+            appendMsg("executed", "Code executed successfully.");
+          } catch (execErr) {
+            appendMsg("system", "Execution error: " + execErr.message);
+          }
+          return;
+        }
+      } catch { /* not valid JSON, show as normal reply */ }
+    }
+
+    appendMsg("assistant", reply + durStr);
+
   } catch (err) {
     typing.remove();
     appendMsg("system", "Local model error: " + err.message);
+    localHistory.pop();
   }
 }
 
