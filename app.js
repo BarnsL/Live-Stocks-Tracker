@@ -605,9 +605,21 @@ const _chartTips = {
   bar: `<strong>Bar chart</strong> displays each period's closing price as an individual vertical bar. Green bars mean the close was higher than the previous period; red bars mean it was lower. Clusters of green bars confirm upward momentum. Tall bars indicate large price moves relative to recent history.`,
 };
 
+const _chartKickers = {
+  candles: 'Binomial Volume Candles',
+  line: 'Line Chart',
+  area: 'Area Chart',
+  ohlc: 'OHLC Candlesticks',
+  heikinashi: 'Heikin-Ashi Candles',
+  mountain: 'Mountain Chart',
+  bar: 'Close Price Bars',
+};
+
 function updateChartTips() {
-  const el = document.getElementById('chart-tips');
-  if (el && _chartTips[_currentChartType]) el.innerHTML = _chartTips[_currentChartType];
+  const tips = document.getElementById('chart-tips');
+  if (tips && _chartTips[_currentChartType]) tips.innerHTML = _chartTips[_currentChartType];
+  const kicker = document.getElementById('chart-kicker');
+  if (kicker && _chartKickers[_currentChartType]) kicker.textContent = _chartKickers[_currentChartType];
 }
 
 function setChartType(type) {
