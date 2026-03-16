@@ -431,43 +431,230 @@ function setBuildOption(fn) {
 // Preserve original builder so we can restore candles
 window._originalBuildOption = buildOption;
 
-// Create a simple line-chart builder (uses close prices)
-function lineBuildOption(symbol, interval, bars) {
+// ── Area chart builder ──
+function areaBuildOption(symbol, interval, bars) {
   const times = bars.map(b => b.time);
   const closes = bars.map(b => b.close);
   return {
-    title: { text: `${symbol} · ${interval} — Close Price (Line)`, left: 14, top: 8 },
+    animation: true,
+    title: { text: `${symbol} · ${interval} — Area`, left: 14, top: 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14 } },
     tooltip: { trigger: 'axis' },
-    xAxis: { type: 'category', data: times, axisLine: { lineStyle: { color: '#a6ad9d' } } },
-    yAxis: { scale: true },
-    grid: { left: 62, right: 20, top: 56, bottom: 40 },
-    dataZoom: [{ type: 'inside' }, { type: 'slider', left: 62, right: 20, bottom: 10 }],
+    xAxis: { type: 'category', data: times, boundaryGap: false, axisLine: { lineStyle: { color: '#a6ad9d' } }, axisLabel: { fontSize: 10 } },
+    yAxis: { scale: true, splitLine: { lineStyle: { color: 'rgba(63,71,57,.14)' } } },
+    grid: { left: 62, right: 20, top: 56, bottom: 50 },
+    dataZoom: [{ type: 'inside' }, { type: 'slider', bottom: 10, left: 62, right: 20 }],
+    series: [{ name: 'Close', type: 'line', data: closes, smooth: true, showSymbol: false, lineStyle: { width: 2, color: BUY }, areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(13,138,87,0.35)' }, { offset: 1, color: 'rgba(13,138,87,0.02)' }] } } }],
+  };
+}
+
+// ── OHLC bar chart builder ──
+function ohlcBuildOption(symbol, interval, bars) {
+  const times = bars.map(b => b.time);
+  const ohlcData = bars.map(b => [b.open, b.close, b.low, b.high]);
+  const buyVols = bars.map(b => b.buyVolume);
+  const sellVols = bars.map(b => b.sellVolume);
+  return {
+    animation: true,
+    title: { text: `${symbol} · ${interval} — OHLC`, left: 14, top: 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14 } },
+    legend: { top: 8, right: 14, data: ['Price', 'Buy Vol', 'Sell Vol'] },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+    grid: [{ left: 62, right: 20, top: 56, height: '52%' }, { left: 62, right: 20, top: '66%', height: '24%' }],
+    xAxis: [{ type: 'category', data: times, axisLabel: { show: false } }, { type: 'category', gridIndex: 1, data: times, axisLabel: { fontSize: 10 } }],
+    yAxis: [{ scale: true }, { gridIndex: 1, splitNumber: 3 }],
+    dataZoom: [{ type: 'inside', xAxisIndex: [0, 1], start: 60, end: 100 }, { type: 'slider', xAxisIndex: [0, 1], bottom: 10 }],
     series: [
-      { name: 'Close', type: 'line', data: closes, smooth: false, showSymbol: false, lineStyle: { width: 2 }, areaStyle: {} },
+      { name: 'Price', type: 'candlestick', data: ohlcData, itemStyle: { color: BUY, color0: SELL, borderColor: BUY, borderColor0: SELL } },
+      { name: 'Buy Vol', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, stack: 'vol', data: buyVols, barWidth: '65%', itemStyle: { color: BUY, opacity: 0.88 } },
+      { name: 'Sell Vol', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, stack: 'vol', data: sellVols, barWidth: '65%', itemStyle: { color: SELL, opacity: 0.88 } },
     ],
   };
 }
 
-// Expose simple helpers for the chatbot to switch chart types safely
-function setChartType(type) {
-  if (type === 'line') {
-    setBuildOption(lineBuildOption);
-    return true;
+// ── Heikin-Ashi builder ──
+function heikinAshiBuildOption(symbol, interval, bars) {
+  const times = bars.map(b => b.time);
+  const ha = [];
+  for (let i = 0; i < bars.length; i++) {
+    const b = bars[i];
+    const haClose = (b.open + b.high + b.low + b.close) / 4;
+    const haOpen = i === 0 ? (b.open + b.close) / 2 : (ha[i - 1][0] + ha[i - 1][1]) / 2;
+    const haHigh = Math.max(b.high, haOpen, haClose);
+    const haLow = Math.min(b.low, haOpen, haClose);
+    ha.push([haOpen, haClose, haLow, haHigh]);
   }
-  if (type === 'candles') {
-    setBuildOption(window._originalBuildOption || buildOption);
-    return true;
-  }
-  return false;
+  const buyVols = bars.map(b => b.buyVolume);
+  const sellVols = bars.map(b => b.sellVolume);
+  return {
+    animation: true,
+    title: { text: `${symbol} · ${interval} — Heikin-Ashi`, left: 14, top: 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14 } },
+    legend: { top: 8, right: 14, data: ['Price', 'Buy Vol', 'Sell Vol'] },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+    grid: [{ left: 62, right: 20, top: 56, height: '52%' }, { left: 62, right: 20, top: '66%', height: '24%' }],
+    xAxis: [{ type: 'category', data: times, axisLabel: { show: false } }, { type: 'category', gridIndex: 1, data: times, axisLabel: { fontSize: 10 } }],
+    yAxis: [{ scale: true }, { gridIndex: 1, splitNumber: 3 }],
+    dataZoom: [{ type: 'inside', xAxisIndex: [0, 1], start: 60, end: 100 }, { type: 'slider', xAxisIndex: [0, 1], bottom: 10 }],
+    series: [
+      { name: 'Price', type: 'candlestick', data: ha, itemStyle: { color: BUY, color0: SELL, borderColor: BUY_WICK, borderColor0: SELL_WICK } },
+      { name: 'Buy Vol', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, stack: 'vol', data: buyVols, barWidth: '65%', itemStyle: { color: BUY, opacity: 0.88 } },
+      { name: 'Sell Vol', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, stack: 'vol', data: sellVols, barWidth: '65%', itemStyle: { color: SELL, opacity: 0.88 } },
+    ],
+  };
 }
+
+// ── Mountain (filled line with gradient) builder ──
+function mountainBuildOption(symbol, interval, bars) {
+  const times = bars.map(b => b.time);
+  const closes = bars.map(b => b.close);
+  const min = Math.min(...closes);
+  return {
+    animation: true,
+    title: { text: `${symbol} · ${interval} — Mountain`, left: 14, top: 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14 } },
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'category', data: times, boundaryGap: false, axisLabel: { fontSize: 10 } },
+    yAxis: { scale: true, min: min * 0.998 },
+    grid: { left: 62, right: 20, top: 56, bottom: 50 },
+    dataZoom: [{ type: 'inside' }, { type: 'slider', bottom: 10, left: 62, right: 20 }],
+    series: [{ name: 'Close', type: 'line', data: closes, smooth: false, showSymbol: false, lineStyle: { width: 1.5, color: '#4a90d9' },
+      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(74,144,217,0.45)' }, { offset: 1, color: 'rgba(74,144,217,0.03)' }] } } }],
+  };
+}
+
+// ── Bar (close-price bars) builder ──
+function barBuildOption(symbol, interval, bars) {
+  const times = bars.map(b => b.time);
+  const closes = bars.map(b => b.close);
+  const prev = [closes[0], ...closes.slice(0, -1)];
+  const colors = closes.map((c, i) => c >= prev[i] ? BUY : SELL);
+  return {
+    animation: true,
+    title: { text: `${symbol} · ${interval} — Close Bars`, left: 14, top: 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14 } },
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'category', data: times, axisLabel: { fontSize: 10 } },
+    yAxis: { scale: true },
+    grid: { left: 62, right: 20, top: 56, bottom: 50 },
+    dataZoom: [{ type: 'inside' }, { type: 'slider', bottom: 10, left: 62, right: 20 }],
+    series: [{ name: 'Close', type: 'bar', data: closes.map((c, i) => ({ value: c, itemStyle: { color: colors[i] } })), barWidth: '70%' }],
+  };
+}
+
+// Extended setChartType with all modes
+const _chartBuilders = {
+  candles: buildOption,
+  line: lineBuildOption,
+  area: areaBuildOption,
+  ohlc: ohlcBuildOption,
+  heikinashi: heikinAshiBuildOption,
+  mountain: mountainBuildOption,
+  bar: barBuildOption,
+};
+
+let _currentChartType = 'candles';
+
+function setChartType(type) {
+  const key = (type || '').toLowerCase().replace(/[^a-z]/g, '');
+  const builder = _chartBuilders[key];
+  if (!builder) return false;
+  _currentChartType = key;
+  setBuildOption(builder);
+  return true;
+}
+function getChartType() { return _currentChartType; }
+function listChartTypes() { return Object.keys(_chartBuilders); }
 
 function setChartToLine() { return setChartType('line'); }
 function setChartToCandles() { return setChartType('candles'); }
+function setChartToArea() { return setChartType('area'); }
+function setChartToOHLC() { return setChartType('ohlc'); }
+function setChartToHeikinAshi() { return setChartType('heikinashi'); }
+function setChartToMountain() { return setChartType('mountain'); }
+function setChartToBar() { return setChartType('bar'); }
 
-// Make helpers available on window for executed assistant code
-window.setChartType = setChartType;
-window.setChartToLine = setChartToLine;
-window.setChartToCandles = setChartToCandles;
+// ── Workspace helpers for chatbot ──
+function addTab(sym) {
+  const s = normalizeSymbol(sym);
+  if (!s) return false;
+  if (!workspaceState.tabs.includes(s)) workspaceState.tabs.push(s);
+  saveWorkspaceState(); renderWorkspaceUI();
+  return true;
+}
+function removeTab(sym) {
+  const s = normalizeSymbol(sym);
+  const idx = workspaceState.tabs.indexOf(s);
+  if (idx === -1 || workspaceState.tabs.length <= 1) return false;
+  workspaceState.tabs.splice(idx, 1);
+  if (workspaceState.activeTab >= workspaceState.tabs.length) workspaceState.activeTab = workspaceState.tabs.length - 1;
+  symbolInput.value = workspaceState.tabs[workspaceState.activeTab];
+  saveWorkspaceState(); renderWorkspaceUI(); render();
+  return true;
+}
+function closeAllTabs() {
+  workspaceState.tabs = [workspaceState.tabs[workspaceState.activeTab] || 'AAPL'];
+  workspaceState.activeTab = 0;
+  symbolInput.value = workspaceState.tabs[0];
+  saveWorkspaceState(); renderWorkspaceUI(); render();
+  return true;
+}
+function switchTab(sym) {
+  const s = normalizeSymbol(sym);
+  const idx = workspaceState.tabs.indexOf(s);
+  if (idx === -1) return false;
+  workspaceState.activeTab = idx;
+  symbolInput.value = s;
+  saveWorkspaceState(); renderWorkspaceUI(); render();
+  return true;
+}
+function switchTabByIndex(i) {
+  if (i < 0 || i >= workspaceState.tabs.length) return false;
+  workspaceState.activeTab = i;
+  symbolInput.value = workspaceState.tabs[i];
+  saveWorkspaceState(); renderWorkspaceUI(); render();
+  return true;
+}
+function getTabs() { return [...workspaceState.tabs]; }
+function getActiveTab() { return workspaceState.tabs[workspaceState.activeTab] || 'AAPL'; }
+function getActiveTabIndex() { return workspaceState.activeTab; }
+function addBookmark(sym) {
+  const s = normalizeSymbol(sym);
+  if (!s || workspaceState.bookmarks.includes(s)) return false;
+  workspaceState.bookmarks.push(s);
+  saveWorkspaceState(); renderWorkspaceUI();
+  return true;
+}
+function removeBookmark(sym) {
+  const s = normalizeSymbol(sym);
+  const idx = workspaceState.bookmarks.indexOf(s);
+  if (idx === -1) return false;
+  workspaceState.bookmarks.splice(idx, 1);
+  saveWorkspaceState(); renderWorkspaceUI();
+  return true;
+}
+function clearBookmarks() {
+  workspaceState.bookmarks = [];
+  saveWorkspaceState(); renderWorkspaceUI();
+  return true;
+}
+function getBookmarks() { return [...workspaceState.bookmarks]; }
+function isBookmarked(sym) { return workspaceState.bookmarks.includes(normalizeSymbol(sym)); }
+function openSymbol(sym) { setActiveSymbol(sym, true); render(); return true; }
+function setInterval_(intv) {
+  const valid = ['1m','5m','15m','1h','1d'];
+  if (!valid.includes(intv)) return false;
+  intervalInput.value = intv; render();
+  return true;
+}
+
+// Make all helpers available on window
+Object.assign(window, {
+  setChartType, getChartType, listChartTypes, setBuildOption,
+  setChartToLine, setChartToCandles, setChartToArea, setChartToOHLC,
+  setChartToHeikinAshi, setChartToMountain, setChartToBar,
+  addTab, removeTab, closeAllTabs, switchTab, switchTabByIndex,
+  getTabs, getActiveTab, getActiveTabIndex,
+  addBookmark, removeBookmark, clearBookmarks, getBookmarks, isBookmarked,
+  openSymbol, setInterval: setInterval_,
+  enableDarkMode, disableDarkMode,
+  workspaceState, renderWorkspaceUI, saveWorkspaceState,
+});
 
 /* ── render is defined below with poll support ── */
 
@@ -676,7 +863,9 @@ async function sendChat() {
     // Current chart state
     const sym = symbolInput.value.trim().toUpperCase() || "AAPL";
     const intv = intervalInput.value;
-    const chartState = `Symbol: ${sym}, Interval: ${intv}, Chart size: ${chartNode.offsetWidth}x${chartNode.offsetHeight}`;
+    const tabs = getTabs();
+    const bmarks = getBookmarks();
+    const chartState = `Symbol: ${sym}, Interval: ${intv}, Chart size: ${chartNode.offsetWidth}x${chartNode.offsetHeight}, Chart type: ${getChartType()}, Tabs: [${tabs.join(', ')}], Active tab: ${getActiveTab()} (#${getActiveTabIndex()}), Bookmarks: [${bmarks.join(', ')}]`;
 
 
     // Send as FormData if images, else JSON
@@ -743,12 +932,28 @@ async function sendChat() {
               "chart", "echarts", "buildOption", "render",
               "BUY", "SELL", "symbolInput", "intervalInput", "pollSelect", "chartNode",
               "enableDarkMode", "disableDarkMode",
+              "addTab", "removeTab", "closeAllTabs", "switchTab", "switchTabByIndex",
+              "getTabs", "getActiveTab", "getActiveTabIndex",
+              "addBookmark", "removeBookmark", "clearBookmarks", "getBookmarks", "isBookmarked",
+              "openSymbol", "setInterval_",
+              "setChartType", "getChartType", "listChartTypes",
+              "setChartToLine", "setChartToCandles", "setChartToArea", "setChartToOHLC",
+              "setChartToHeikinAshi", "setChartToMountain", "setChartToBar",
+              "setBuildOption", "workspaceState", "saveWorkspaceState", "renderWorkspaceUI",
               action.code
             );
             fn(
               chart, echarts, buildOption, render,
               BUY, SELL, symbolInput, intervalInput, pollSelect, chartNode,
-              enableDarkMode, disableDarkMode
+              enableDarkMode, disableDarkMode,
+              addTab, removeTab, closeAllTabs, switchTab, switchTabByIndex,
+              getTabs, getActiveTab, getActiveTabIndex,
+              addBookmark, removeBookmark, clearBookmarks, getBookmarks, isBookmarked,
+              openSymbol, setInterval_,
+              setChartType, getChartType, listChartTypes,
+              setChartToLine, setChartToCandles, setChartToArea, setChartToOHLC,
+              setChartToHeikinAshi, setChartToMountain, setChartToBar,
+              setBuildOption, workspaceState, saveWorkspaceState, renderWorkspaceUI
             );
             appendMsg("executed", "Code executed successfully.");
           } catch (execErr) {
