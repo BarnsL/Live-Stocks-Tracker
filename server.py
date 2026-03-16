@@ -194,6 +194,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._handle_save_key(body)
         elif parsed.path == "/api/local-edit":
             self._handle_local_edit(body)
+        elif parsed.path == "/api/local-chat":
+            self._handle_local_chat(body)
         elif parsed.path == "/api/workspace":
             self._handle_save_workspace(body)
         else:
@@ -263,6 +265,22 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         status = local_model.check_ollama_status(cfg)
         status["enabled"] = cfg.get("enabled", True)
         self._json_response(200, status)
+
+    def _handle_local_chat(self, body):
+        try:
+            data = json.loads(body)
+        except Exception as exc:
+            self._json_response(400, {"error": f"Invalid JSON: {exc}"})
+            return
+
+        message = (data.get("message") or "").strip()
+        if not message:
+            self._json_response(400, {"error": "Missing 'message' field."})
+            return
+
+        result = local_model.chat(message)
+        status_code = 200 if result.get("ok") else 422
+        self._json_response(status_code, result)
 
     def _handle_local_edit(self, body):
         try:
