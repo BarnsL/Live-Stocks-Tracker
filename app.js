@@ -1,3 +1,35 @@
+// ── Diagnostics Log Capture ──
+const _logBuffer = [];
+const _maxLogs = 500;
+function _captureLog(level, origFn, args) {
+  const ts = new Date().toISOString().slice(11, 23);
+  const msg = Array.from(args).map(a => {
+    try { return typeof a === 'object' ? JSON.stringify(a) : String(a); }
+    catch { return String(a); }
+  }).join(' ');
+  _logBuffer.push(`[${ts}] ${level}: ${msg}`);
+  if (_logBuffer.length > _maxLogs) _logBuffer.shift();
+  origFn.apply(console, args);
+}
+const _origLog = console.log, _origWarn = console.warn, _origError = console.error;
+console.log = function() { _captureLog('LOG', _origLog, arguments); };
+console.warn = function() { _captureLog('WARN', _origWarn, arguments); };
+console.error = function() { _captureLog('ERR', _origError, arguments); };
+window.addEventListener('error', (e) => {
+  _logBuffer.push(`[${new Date().toISOString().slice(11,23)}] UNCAUGHT: ${e.message} at ${e.filename}:${e.lineno}:${e.colno}`);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  _logBuffer.push(`[${new Date().toISOString().slice(11,23)}] UNHANDLED_PROMISE: ${e.reason}`);
+});
+
+function copyDiagnosticLogs() {
+  const text = _logBuffer.length ? _logBuffer.join('\n') : '(no logs captured)';
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copy-logs-btn');
+    if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy Logs', 1500); }
+  }).catch(() => alert('Failed to copy — check clipboard permissions'));
+}
+
 // ── Dark Mode Helpers ──
 function enableDarkMode() {
   document.body.classList.add('dark');
@@ -20,10 +52,12 @@ const pollSelect = document.getElementById("poll");
 const pollDot = document.getElementById("poll-indicator");
 const searchResults = document.getElementById("search-results");
 const stockTabsNode = document.getElementById("stock-tabs");
-const addTabButton = document.getElementById("add-tab");
 const bookmarkCurrentButton = document.getElementById("bookmark-current");
 const stockBookmarksNode = document.getElementById("stock-bookmarks");
 const chart = echarts.init(chartNode);
+
+// Wire up Copy Logs button
+document.getElementById('copy-logs-btn')?.addEventListener('click', copyDiagnosticLogs);
 
 /* ── tabs + bookmarks persistence ── */
 const WORKSPACE_KEY = "liveStocks.workspace.v1";
@@ -160,12 +194,6 @@ function renderWorkspaceUI() {
   });
 }
 
-addTabButton.addEventListener("click", () => {
-  const sym = normalizeSymbol(symbolInput.value) || "AAPL";
-  setActiveSymbol(sym, true);
-  render();
-});
-
 bookmarkCurrentButton.addEventListener("click", () => {
   const sym = normalizeSymbol(symbolInput.value) || "AAPL";
   const existing = workspaceState.bookmarks.indexOf(sym);
@@ -301,6 +329,9 @@ async function fetchBars(symbol, interval) {
 }
 
 /* ── chart option builder ── */
+function _titleColor() { return document.body.classList.contains('dark') ? '#e0e0e0' : '#1d2218'; }
+function _legendColor() { return document.body.classList.contains('dark') ? '#b0b0b0' : '#3f4739'; }
+
 function buildOption(symbol, interval, bars) {
   const times = bars.map((b) => b.time);
 
@@ -319,11 +350,11 @@ function buildOption(symbol, interval, bars) {
     title: {
       text: `${symbol} · ${interval}  —  Binomial Volume Candles`,
       left: 14, top: 8,
-      textStyle: { fontFamily: "Space Grotesk, sans-serif", fontWeight: 600, fontSize: 14, color: "#1d2218" },
+      textStyle: { fontFamily: "Space Grotesk, sans-serif", fontWeight: 600, fontSize: 14, color: _titleColor() },
     },
     legend: {
       top: 8, right: 14, itemWidth: 14, itemHeight: 8,
-      textStyle: { fontFamily: "IBM Plex Mono, monospace", color: "#3f4739" },
+      textStyle: { fontFamily: "IBM Plex Mono, monospace", color: _legendColor() },
       data: ["Price", "Buy Vol", "Sell Vol"],
     },
     tooltip: {
@@ -419,8 +450,6 @@ window.buildOption = buildOption;
 function setBuildOption(fn) {
   try {
     if (typeof fn === 'function') {
-      window.buildOption = fn;
-      // re-render with new builder
       try { render(true); } catch (e) { console.warn('setBuildOption render failed', e); }
       return true;
     }
@@ -431,13 +460,29 @@ function setBuildOption(fn) {
 // Preserve original builder so we can restore candles
 window._originalBuildOption = buildOption;
 
+// ── Line chart builder ──
+function lineBuildOption(symbol, interval, bars) {
+  const times = bars.map(b => b.time);
+  const closes = bars.map(b => b.close);
+  return {
+    animation: true,
+    title: { text: `${symbol} · ${interval} — Line`, left: 14, top: 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14, color: _titleColor() } },
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'category', data: times, boundaryGap: false, axisLine: { lineStyle: { color: '#a6ad9d' } }, axisLabel: { fontSize: 10 } },
+    yAxis: { scale: true },
+    grid: { left: 62, right: 20, top: 56, bottom: 50 },
+    dataZoom: [{ type: 'inside' }, { type: 'slider', bottom: 10, left: 62, right: 20 }],
+    series: [{ name: 'Close', type: 'line', data: closes, smooth: false, symbol: 'none', lineStyle: { width: 2, color: '#3ba272' } }],
+  };
+}
+
 // ── Area chart builder ──
 function areaBuildOption(symbol, interval, bars) {
   const times = bars.map(b => b.time);
   const closes = bars.map(b => b.close);
   return {
     animation: true,
-    title: { text: `${symbol} · ${interval} — Area`, left: 14, top: 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14 } },
+    title: { text: `${symbol} · ${interval} — Area`, left: 14, top: 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14, color: _titleColor() } },
     tooltip: { trigger: 'axis' },
     xAxis: { type: 'category', data: times, boundaryGap: false, axisLine: { lineStyle: { color: '#a6ad9d' } }, axisLabel: { fontSize: 10 } },
     yAxis: { scale: true, splitLine: { lineStyle: { color: 'rgba(63,71,57,.14)' } } },
@@ -455,7 +500,7 @@ function ohlcBuildOption(symbol, interval, bars) {
   const sellVols = bars.map(b => b.sellVolume);
   return {
     animation: true,
-    title: { text: `${symbol} · ${interval} — OHLC`, left: 14, top: 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14 } },
+    title: { text: `${symbol} · ${interval} — OHLC`, left: 14, top: 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14, color: _titleColor() } },
     legend: { top: 8, right: 14, data: ['Price', 'Buy Vol', 'Sell Vol'] },
     tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
     grid: [{ left: 62, right: 20, top: 56, height: '52%' }, { left: 62, right: 20, top: '66%', height: '24%' }],
@@ -486,7 +531,7 @@ function heikinAshiBuildOption(symbol, interval, bars) {
   const sellVols = bars.map(b => b.sellVolume);
   return {
     animation: true,
-    title: { text: `${symbol} · ${interval} — Heikin-Ashi`, left: 14, top: 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14 } },
+    title: { text: `${symbol} · ${interval} — Heikin-Ashi`, left: 14, top: 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14, color: _titleColor() } },
     legend: { top: 8, right: 14, data: ['Price', 'Buy Vol', 'Sell Vol'] },
     tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
     grid: [{ left: 62, right: 20, top: 56, height: '52%' }, { left: 62, right: 20, top: '66%', height: '24%' }],
@@ -508,7 +553,7 @@ function mountainBuildOption(symbol, interval, bars) {
   const min = Math.min(...closes);
   return {
     animation: true,
-    title: { text: `${symbol} · ${interval} — Mountain`, left: 14, top: 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14 } },
+    title: { text: `${symbol} · ${interval} — Mountain`, left: 14, top: 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14, color: _titleColor() } },
     tooltip: { trigger: 'axis' },
     xAxis: { type: 'category', data: times, boundaryGap: false, axisLabel: { fontSize: 10 } },
     yAxis: { scale: true, min: min * 0.998 },
@@ -527,7 +572,7 @@ function barBuildOption(symbol, interval, bars) {
   const colors = closes.map((c, i) => c >= prev[i] ? BUY : SELL);
   return {
     animation: true,
-    title: { text: `${symbol} · ${interval} — Close Bars`, left: 14, top: 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14 } },
+    title: { text: `${symbol} · ${interval} — Close Bars`, left: 14, top: 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14, color: _titleColor() } },
     tooltip: { trigger: 'axis' },
     xAxis: { type: 'category', data: times, axisLabel: { fontSize: 10 } },
     yAxis: { scale: true },
@@ -694,7 +739,8 @@ async function render(silent) {
     const bars = await fetchBars(symbol, interval);
     if (!silent) chart.hideLoading();
     if (bars.length) {
-      chart.setOption(buildOption(symbol, interval, bars), true);
+      const builder = _chartBuilders[_currentChartType] || buildOption;
+      chart.setOption(builder(symbol, interval, bars), true);
     } else {
       if (!silent) chart.hideLoading();
       console.warn("No data returned for", symbol);
