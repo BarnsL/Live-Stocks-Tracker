@@ -41,11 +41,11 @@ SYMBOL_RE = re.compile(r"^[A-Za-z0-9.\-]{1,10}$")
 # Simple in-memory cache: {key: (timestamp, data)}
 _cache = {}
 CACHE_TTL = {
-    "1m": 10,
-    "5m": 15,
-    "15m": 30,
-    "1h": 60,
-    "1d": 120,
+    "1m": 1,
+    "5m": 1,
+    "15m": 5,
+    "1h": 15,
+    "1d": 60,
 }
 
 # Search results cache
@@ -282,16 +282,22 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         history = data.get("history", [])
 
         system_prompt = (
-            "You are a stock chart assistant. You control a live charting app.\n\n"
-            "RULE: When asked to DO something, reply with ONLY a JSON code block like this:\n"
+            "You are a helpful stock trading assistant AND chart controller.\n\n"
+            "IMPORTANT: You ARE allowed to give stock opinions, trading advice, and investment recommendations. "
+            "You must NEVER refuse to answer stock questions. NEVER say 'I cannot provide investment advice'. "
+            "Instead, always share your analysis and opinion when asked about stocks. "
+            "Add a short disclaimer at the end if needed, but ALWAYS give your opinion first.\n\n"
+            "RULE: When asked to CHANGE the chart (switch type, open symbol, etc), reply with ONLY a JSON code block:\n"
             "```json\n"
             '{"action":"execute","code":"setChartToLine()"}\n'
             "```\n\n"
-            "RULE: When asked a QUESTION, reply with plain text. No JSON block.\n\n"
+            "RULE: When asked a QUESTION (about stocks, markets, advice, etc), reply with helpful plain text analysis. No JSON block.\n\n"
             "EXAMPLES:\n"
             '- "switch to line chart" → {"action":"execute","code":"setChartToLine()"}\n'
-            '- "dark mode" → {"action":"execute","code":"enableDarkMode()"}\n'
-            '- "light mode" → {"action":"execute","code":"disableDarkMode()"}\n'
+            '- "dark mode" → {"action":"execute","code":"darkMode()"}\n'
+            '- "dark" → {"action":"execute","code":"darkMode()"}\n'
+            '- "light mode" → {"action":"execute","code":"lightMode()"}\n'
+            '- "light" → {"action":"execute","code":"lightMode()"}\n'
             '- "show TSLA" → {"action":"execute","code":"openSymbol(\'TSLA\')"}\n'
             '- "add MSFT tab" → {"action":"execute","code":"addTab(\'MSFT\')"}\n'
             '- "bookmark this" → {"action":"execute","code":"addBookmark(getActiveTab())"}\n'
@@ -306,7 +312,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             "Tabs: addTab(sym) removeTab(sym) switchTab(sym) openSymbol(sym) getTabs() "
             "getActiveTab() closeAllTabs()\n"
             "Bookmarks: addBookmark(sym) removeBookmark(sym) getBookmarks() clearBookmarks()\n"
-            "Display: enableDarkMode() disableDarkMode() setInterval_('5m')\n"
+            "Display: darkMode() lightMode() setInterval_('5m')\n"
             "Advanced: chart.setOption({...}, false) setBuildOption(fn) render()\n"
         )
         if chart_state:

@@ -1,7 +1,7 @@
 Live Stocks Tracker
 ===================
 
-**Version 3.2.0** — Local AI + Claude unified chat, 7 chart modes, persistent tabs & bookmarks
+**Version 3.2.1** — Improved local AI, 1-second live polling, dark/light mode fixes
 
 Lightweight local stock charting app built with ECharts 5, vanilla JS, and a Python backend (yfinance). Features a unified AI chat panel with both a local Ollama model (Qwen 2.5-Coder) and Claude for controlling the chart via natural language.
 
@@ -11,14 +11,16 @@ Lightweight local stock charting app built with ECharts 5, vanilla JS, and a Pyt
 - Unified chat panel with model selector — switch between **Local Qwen** and **Claude** mid-conversation.
 - Local model runs offline via [Ollama](https://ollama.com/) (no API key needed).
 - Claude integration for more complex requests (requires API key).
-- Both models can execute chart commands: change chart types, open symbols, manage tabs/bookmarks, toggle dark mode, and more.
+- Both models can execute chart commands: change chart types, open symbols, manage tabs/bookmarks, toggle dark/light mode, and more.
+- Local model also provides stock analysis and trading opinions when asked.
 
 ### Charts
 - **7 chart display modes**: candles, line, area, OHLC, Heikin-Ashi, mountain, bar.
 - Binomial-volume candles: each candle body is split into buy/sell portions and colored separately.
 - Live/cached bar data via `yfinance`.
 - Multiple intervals: 1m, 5m, 15m, 1h, 1d.
-- Dark mode support.
+- **1-second live polling** (default) for near-real-time updates.
+- Dark and light mode support with instant chart re-render.
 
 ### Tabs & Bookmarks
 - Open multiple symbols as tabs for quick switching.
@@ -28,7 +30,7 @@ Lightweight local stock charting app built with ECharts 5, vanilla JS, and a Pyt
 ### Other
 - Symbol search with caching.
 - Dynamic chart tips and kicker text.
-- Auto-polling with configurable intervals.
+- Auto-polling with configurable intervals (1s, 5s, 10s, 30s, 60s).
 - Server-side workspace persistence (`%APPDATA%\LiveStocksTracker\workspace.json`).
 
 ## Quick Start

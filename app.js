@@ -33,10 +33,14 @@ function copyDiagnosticLogs() {
 // ── Dark Mode Helpers ──
 function enableDarkMode() {
   document.body.classList.add('dark');
+  render(true);
 }
 function disableDarkMode() {
   document.body.classList.remove('dark');
+  render(true);
 }
+const darkMode = enableDarkMode;
+const lightMode = disableDarkMode;
 /* ── constants ── */
 const BUY = "#0d8a57";
 const SELL = "#ca5a18";
@@ -748,7 +752,7 @@ Object.assign(window, {
   getTabs, getActiveTab, getActiveTabIndex,
   addBookmark, removeBookmark, clearBookmarks, getBookmarks, isBookmarked,
   openSymbol, setInterval: setInterval_,
-  enableDarkMode, disableDarkMode,
+  enableDarkMode, disableDarkMode, darkMode, lightMode,
   workspaceState, renderWorkspaceUI, saveWorkspaceState,
 });
 
@@ -1073,7 +1077,7 @@ async function sendLocalChat(text) {
             const fn = new Function(
               "chart", "echarts", "buildOption", "render",
               "BUY", "SELL", "symbolInput", "intervalInput", "pollSelect", "chartNode",
-              "enableDarkMode", "disableDarkMode",
+              "enableDarkMode", "disableDarkMode", "darkMode", "lightMode",
               "addTab", "removeTab", "closeAllTabs", "switchTab", "switchTabByIndex",
               "getTabs", "getActiveTab", "getActiveTabIndex",
               "addBookmark", "removeBookmark", "clearBookmarks", "getBookmarks", "isBookmarked",
@@ -1087,7 +1091,7 @@ async function sendLocalChat(text) {
             fn(
               chart, echarts, buildOption, render,
               BUY, SELL, symbolInput, intervalInput, pollSelect, chartNode,
-              enableDarkMode, disableDarkMode,
+              enableDarkMode, disableDarkMode, darkMode, lightMode,
               addTab, removeTab, closeAllTabs, switchTab, switchTabByIndex,
               getTabs, getActiveTab, getActiveTabIndex,
               addBookmark, removeBookmark, clearBookmarks, getBookmarks, isBookmarked,
@@ -1188,7 +1192,7 @@ async function sendClaudeChat(text) {
             const fn = new Function(
               "chart", "echarts", "buildOption", "render",
               "BUY", "SELL", "symbolInput", "intervalInput", "pollSelect", "chartNode",
-              "enableDarkMode", "disableDarkMode",
+              "enableDarkMode", "disableDarkMode", "darkMode", "lightMode",
               "addTab", "removeTab", "closeAllTabs", "switchTab", "switchTabByIndex",
               "getTabs", "getActiveTab", "getActiveTabIndex",
               "addBookmark", "removeBookmark", "clearBookmarks", "getBookmarks", "isBookmarked",
@@ -1202,7 +1206,7 @@ async function sendClaudeChat(text) {
             fn(
               chart, echarts, buildOption, render,
               BUY, SELL, symbolInput, intervalInput, pollSelect, chartNode,
-              enableDarkMode, disableDarkMode,
+              enableDarkMode, disableDarkMode, darkMode, lightMode,
               addTab, removeTab, closeAllTabs, switchTab, switchTabByIndex,
               getTabs, getActiveTab, getActiveTabIndex,
               addBookmark, removeBookmark, clearBookmarks, getBookmarks, isBookmarked,
