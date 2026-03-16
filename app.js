@@ -69,35 +69,58 @@ function normalizeSymbol(value) {
     .slice(0, 15);
 }
 
+function _parseWorkspace(parsed) {
+  const tabs = Array.isArray(parsed.tabs)
+    ? parsed.tabs.map(normalizeSymbol).filter(Boolean)
+    : [];
+  const bookmarks = Array.isArray(parsed.bookmarks)
+    ? parsed.bookmarks.map(normalizeSymbol).filter(Boolean)
+    : [];
+  const safeTabs = tabs.length ? Array.from(new Set(tabs)) : ["AAPL"];
+  const activeTab = Number.isInteger(parsed.activeTab)
+    ? Math.max(0, Math.min(parsed.activeTab, safeTabs.length - 1))
+    : 0;
+  return { tabs: safeTabs, activeTab, bookmarks: Array.from(new Set(bookmarks)) };
+}
+
 function loadWorkspaceState() {
+  const fallback = { tabs: ["AAPL"], activeTab: 0, bookmarks: [] };
   try {
     const raw = localStorage.getItem(WORKSPACE_KEY);
-    if (!raw) return { tabs: ["AAPL"], activeTab: 0, bookmarks: [] };
-    const parsed = JSON.parse(raw);
-    const tabs = Array.isArray(parsed.tabs)
-      ? parsed.tabs.map(normalizeSymbol).filter(Boolean)
-      : [];
-    const bookmarks = Array.isArray(parsed.bookmarks)
-      ? parsed.bookmarks.map(normalizeSymbol).filter(Boolean)
-      : [];
-    const safeTabs = tabs.length ? Array.from(new Set(tabs)) : ["AAPL"];
-    const activeTab = Number.isInteger(parsed.activeTab)
-      ? Math.max(0, Math.min(parsed.activeTab, safeTabs.length - 1))
-      : 0;
-    return {
-      tabs: safeTabs,
-      activeTab,
-      bookmarks: Array.from(new Set(bookmarks)),
-    };
-  } catch {
-    return { tabs: ["AAPL"], activeTab: 0, bookmarks: [] };
-  }
+    if (raw) return _parseWorkspace(JSON.parse(raw));
+  } catch { /* ignore */ }
+  return fallback;
 }
 
 let workspaceState = loadWorkspaceState();
 
+// On startup, try to merge server-side workspace (survives port changes / machine restarts)
+fetch("/api/workspace").then(r => r.json()).then(server => {
+  if (!server || !Array.isArray(server.bookmarks)) return;
+  const merged = _parseWorkspace(server);
+  // Merge: union of bookmarks and tabs from both sources
+  const allBookmarks = Array.from(new Set([...workspaceState.bookmarks, ...merged.bookmarks]));
+  const allTabs = Array.from(new Set([...workspaceState.tabs, ...merged.tabs]));
+  // Prefer local activeTab if valid, otherwise use server's
+  const activeTab = workspaceState.activeTab < allTabs.length
+    ? workspaceState.activeTab : merged.activeTab;
+  workspaceState.tabs = allTabs.length ? allTabs : ["AAPL"];
+  workspaceState.bookmarks = allBookmarks;
+  workspaceState.activeTab = Math.max(0, Math.min(activeTab, workspaceState.tabs.length - 1));
+  symbolInput.value = workspaceState.tabs[workspaceState.activeTab] || "AAPL";
+  saveWorkspaceState();
+  renderWorkspaceUI();
+  render();
+}).catch(() => { /* server not ready yet, use localStorage */ });
+
 function saveWorkspaceState() {
   localStorage.setItem(WORKSPACE_KEY, JSON.stringify(workspaceState));
+  // Also persist to server (file-backed, survives port/restart changes)
+  fetch("/api/workspace", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(workspaceState),
+  }).catch(() => { /* best-effort */ });
 }
 
 function ensureWorkspaceIntegrity() {
@@ -783,7 +806,7 @@ setActiveSymbol(workspaceState.tabs[workspaceState.activeTab] || "AAPL", true);
 render();
 setupPoll();
 
-/* ── Claude Chat ──────────────────────────────────── */
+/* ── AI Chat (unified: Local Qwen + Claude) ──────── */
 
 const chatToggle = document.getElementById("chat-toggle");
 const chatPanel = document.getElementById("chat-panel");
@@ -797,20 +820,79 @@ const saveKeyBtn = document.getElementById("save-key");
 const chatImageBtn = document.getElementById("chat-image-btn");
 const chatImageUpload = document.getElementById("chat-image-upload");
 const chatImagePreview = document.getElementById("chat-image-preview");
+const chatModelSelect = document.getElementById("chat-model-select");
+const chatModelStatus = document.getElementById("chat-model-status");
 
 let chatImages = [];
-
 let chatHistory = [];
 
-// Check if API key exists on load
-fetch("/api/key-status").then(r => r.json()).then(d => {
-  if (d.has_key) chatKeyBanner.classList.add("hidden");
-}).catch(() => {});
+function getSelectedModel() { return chatModelSelect.value; }
+
+// Show/hide key banner and image button based on model selection
+chatModelSelect.addEventListener("change", () => {
+  const model = getSelectedModel();
+  if (model === "claude") {
+    fetch("/api/key-status").then(r => r.json()).then(d => {
+      if (!d.has_key) chatKeyBanner.classList.remove("hidden");
+      else chatKeyBanner.classList.add("hidden");
+    }).catch(() => {});
+    chatImageBtn.style.display = "";
+  } else {
+    chatKeyBanner.classList.add("hidden");
+    chatImageBtn.style.display = "none";
+  }
+  updateModelStatus();
+});
+
+function updateModelStatus() {
+  const model = getSelectedModel();
+  if (model === "local") {
+    fetch("/api/local-model-status")
+      .then(r => r.json())
+      .then(d => {
+        if (!d.enabled) {
+          chatModelStatus.className = "chat-model-status offline";
+          chatModelStatus.title = "Local AI disabled in config";
+        } else if (d.online && d.model_available) {
+          chatModelStatus.className = "chat-model-status online";
+          chatModelStatus.title = "Connected: " + d.model;
+        } else if (d.online) {
+          chatModelStatus.className = "chat-model-status warn";
+          chatModelStatus.title = "Ollama online but model not found. Run: ollama pull " + d.model;
+        } else {
+          chatModelStatus.className = "chat-model-status offline";
+          chatModelStatus.title = "Ollama not running. Start Ollama first.";
+        }
+      })
+      .catch(() => {
+        chatModelStatus.className = "chat-model-status offline";
+        chatModelStatus.title = "Cannot reach server";
+      });
+  } else {
+    fetch("/api/key-status").then(r => r.json()).then(d => {
+      if (d.has_key) {
+        chatModelStatus.className = "chat-model-status online";
+        chatModelStatus.title = "Claude API key configured";
+      } else {
+        chatModelStatus.className = "chat-model-status offline";
+        chatModelStatus.title = "No API key \u2014 enter one above";
+      }
+    }).catch(() => {
+      chatModelStatus.className = "chat-model-status offline";
+      chatModelStatus.title = "Cannot reach server";
+    });
+  }
+}
+
+// Default: local model, hide image button, check status
+chatImageBtn.style.display = "none";
+updateModelStatus();
 
 chatToggle.addEventListener("click", () => {
   chatPanel.classList.add("open");
   chatToggle.classList.add("hidden");
   chatInput.focus();
+  updateModelStatus();
 });
 
 chatClose.addEventListener("click", () => {
@@ -831,6 +913,7 @@ saveKeyBtn.addEventListener("click", async () => {
     if (data.ok) {
       chatKeyBanner.classList.add("hidden");
       appendMsg("system", "API key saved.");
+      updateModelStatus();
     } else {
       appendMsg("system", data.error || "Failed to save key");
     }
@@ -840,9 +923,7 @@ saveKeyBtn.addEventListener("click", async () => {
 });
 
 chatSend.addEventListener("click", sendChat);
-chatImageBtn.addEventListener("click", () => {
-  chatImageUpload.click();
-});
+chatImageBtn.addEventListener("click", () => { chatImageUpload.click(); });
 
 chatImageUpload.addEventListener("change", (e) => {
   const files = Array.from(e.target.files);
@@ -853,7 +934,7 @@ chatImageUpload.addEventListener("change", (e) => {
   for (const file of files) {
     if (!file.type.startsWith("image/")) continue;
     if (file.size > 50 * 1024 * 1024) {
-      alert(`Image ${file.name} is too large (max 50MB).`);
+      alert("Image " + file.name + " is too large (max 50MB).");
       continue;
     }
     const reader = new FileReader();
@@ -868,7 +949,7 @@ chatImageUpload.addEventListener("change", (e) => {
 
 function renderImagePreview() {
   chatImagePreview.innerHTML = chatImages.map((img, i) =>
-    `<div class="img-thumb"><img src="${img.data}" alt="img"/><button type="button" data-idx="${i}" title="Remove">&times;</button></div>`
+    '<div class="img-thumb"><img src="' + img.data + '" alt="img"/><button type="button" data-idx="' + i + '" title="Remove">&times;</button></div>'
   ).join("");
   chatImagePreview.querySelectorAll("button").forEach(btn => {
     btn.onclick = () => {
@@ -877,6 +958,7 @@ function renderImagePreview() {
     };
   });
 }
+
 chatInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
@@ -886,7 +968,7 @@ chatInput.addEventListener("keydown", (e) => {
 
 function appendMsg(role, text) {
   const div = document.createElement("div");
-  div.className = `chat-msg ${role}`;
+  div.className = "chat-msg " + role;
   if (role === "assistant") {
     div.innerHTML = renderMarkdown(text);
   } else {
@@ -898,7 +980,6 @@ function appendMsg(role, text) {
 }
 
 function renderMarkdown(text) {
-  // Minimal markdown: code blocks, inline code, bold, newlines
   return text
     .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')
@@ -907,42 +988,91 @@ function renderMarkdown(text) {
 }
 
 async function sendChat() {
-
   const text = chatInput.value.trim();
   if (!text && chatImages.length === 0) return;
 
   chatInput.value = "";
   if (text) appendMsg("user", text);
   if (chatImages.length) {
-    for (const img of chatImages) {
-      appendMsg("user", `[Image: ${img.name}]`);
-    }
+    for (const img of chatImages) appendMsg("user", "[Image: " + img.name + "]");
   }
-  chatHistory.push({ role: "user", content: text, images: chatImages.map(img => ({ name: img.name })) });
 
-  // Prepare messages for backend: strip 'images' property (Claude API does not allow extra fields)
-  const safeMessages = chatHistory.map(({ role, content }) => ({ role, content }));
-  // Show typing indicator
+  const model = getSelectedModel();
+
+  if (model === "local") {
+    await sendLocalChat(text);
+  } else {
+    chatHistory.push({ role: "user", content: text, images: chatImages.map(img => ({ name: img.name })) });
+    await sendClaudeChat(text);
+  }
+}
+
+// ── Local model path ──
+function _extractCodeFromMessage(text) {
+  const match = text.match(/```[\w]*\n([\s\S]*?)```/);
+  return match ? match[1].trim() : "";
+}
+
+async function sendLocalChat(text) {
+  const code = _extractCodeFromMessage(text);
+  const instruction = text.replace(/```[\w]*\n[\s\S]*?```/g, "").trim();
+
+  if (!instruction) {
+    appendMsg("system", "Send an instruction. Optionally include a code block with ``` fences.");
+    return;
+  }
+  if (!code) {
+    appendMsg("system", "Include a code snippet in ``` fences for the local model to edit.");
+    return;
+  }
+
   const typing = document.createElement("div");
   typing.className = "chat-msg chat-typing";
-  typing.textContent = "Claude is thinking…";
+  typing.textContent = "Local model is thinking\u2026";
   chatMessages.appendChild(typing);
   chatMessages.scrollTop = chatMessages.scrollHeight;
 
   try {
-    // Get current app.js source for context
+    const res = await fetch("/api/local-edit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ instruction, code }),
+    });
+    typing.remove();
+    const data = await res.json();
+
+    if (data.ok) {
+      const durStr = data.duration ? " (" + data.duration.toFixed(1) + "s)" : "";
+      appendMsg("assistant", "Here is the edited code" + durStr + ":\n\n```\n" + data.result + "\n```");
+    } else {
+      appendMsg("system", data.error || "Local edit failed.");
+    }
+  } catch (err) {
+    typing.remove();
+    appendMsg("system", "Local model error: " + err.message);
+  }
+}
+
+// ── Claude path ──
+async function sendClaudeChat(text) {
+  const safeMessages = chatHistory.map(({ role, content }) => ({ role, content }));
+
+  const typing = document.createElement("div");
+  typing.className = "chat-msg chat-typing";
+  typing.textContent = "Claude is thinking\u2026";
+  chatMessages.appendChild(typing);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+
+  try {
     const srcRes = await fetch("/app.js");
     const appSource = await srcRes.text();
 
-    // Current chart state
     const sym = symbolInput.value.trim().toUpperCase() || "AAPL";
     const intv = intervalInput.value;
     const tabs = getTabs();
     const bmarks = getBookmarks();
-    const chartState = `Symbol: ${sym}, Interval: ${intv}, Chart size: ${chartNode.offsetWidth}x${chartNode.offsetHeight}, Chart type: ${getChartType()}, Tabs: [${tabs.join(', ')}], Active tab: ${getActiveTab()} (#${getActiveTabIndex()}), Bookmarks: [${bmarks.join(', ')}]`;
+    const chartState = "Symbol: " + sym + ", Interval: " + intv + ", Chart size: " + chartNode.offsetWidth + "x" + chartNode.offsetHeight + ", Chart type: " + getChartType() + ", Tabs: [" + tabs.join(", ") + "], Active tab: " + getActiveTab() + " (#" + getActiveTabIndex() + "), Bookmarks: [" + bmarks.join(", ") + "]";
 
-
-    // Send as FormData if images, else JSON
     let res;
     if (chatImages.length) {
       const form = new FormData();
@@ -950,7 +1080,6 @@ async function sendChat() {
       form.append("appSource", appSource);
       form.append("chartState", chartState);
       chatImages.forEach((img, i) => {
-        // DataURL to Blob
         const arr = img.data.split(",");
         const mime = arr[0].match(/:(.*?);/)[1];
         const bstr = atob(arr[1]);
@@ -964,11 +1093,7 @@ async function sendChat() {
       res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: safeMessages,
-          appSource,
-          chartState,
-        }),
+        body: JSON.stringify({ messages: safeMessages, appSource, chartState }),
       });
     }
     chatImages = [];
@@ -979,7 +1104,7 @@ async function sendChat() {
 
     if (data.error) {
       appendMsg("system", data.error);
-      chatHistory.pop(); // remove failed user msg
+      chatHistory.pop();
       return;
     }
 
@@ -992,15 +1117,11 @@ async function sendChat() {
       try {
         const action = JSON.parse(codeMatch[1]);
         if (action.action === "execute" && action.code) {
-          // Show the explanation (text before/after the JSON block)
           const explanation = reply.replace(/```json\s*\n\{[\s\S]*?\}\s*\n```/, "").trim();
           if (explanation) appendMsg("assistant", explanation);
 
-          // Debug: log the code to be executed
           console.log("[Claude EXECUTE]", action.code);
-          appendMsg("system", "[Debug] Executing code: " + action.code);
 
-          // Execute the code
           try {
             const fn = new Function(
               "chart", "echarts", "buildOption", "render",
@@ -1038,7 +1159,6 @@ async function sendChat() {
       } catch { /* not valid JSON, show as normal reply */ }
     }
 
-    // Normal text reply
     appendMsg("assistant", reply);
 
   } catch (err) {

@@ -30,6 +30,7 @@ body.dark .chat-key-banner,
 body.dark .chat-messages,
 body.dark .chat-input-row,
 body.dark .img-thumb,
+
 body.dark .stock-workspace,
 body.dark .stock-tab,
 body.dark .stock-bookmark {
@@ -720,6 +721,38 @@ button:hover {
   text-align: center;
   max-width: 100%;
 }
+
+/* ── Chat Model Selector ──────────────────────────── */
+.chat-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+#chat-model-select {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+}
+body.dark #chat-model-select {
+  background: #23272a;
+  color: #e8e8e8;
+  border-color: #444;
+}
+.chat-model-status {
+  font-size: 10px;
+  cursor: help;
+}
+.chat-model-status.online { color: #0d8a57; }
+.chat-model-status.warn { color: #e6a817; }
+.chat-model-status.offline { color: #ca5a18; }
+.hidden { display: none !important; }
 
 .chat-typing {
   align-self: flex-start;

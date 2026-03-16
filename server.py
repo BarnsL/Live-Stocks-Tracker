@@ -14,6 +14,8 @@ from datetime import timezone, timedelta
 import anthropic
 import yfinance as yf
 
+import local_model
+
 # Pacific Time: UTC-8 (PST) — fixed offset for display consistency
 PACIFIC = timezone(timedelta(hours=-8), name="PST")
 
@@ -50,11 +52,13 @@ CACHE_TTL = {
 _search_cache = {}
 
 # Claude API key storage
-_CLAUDE_KEY_FILE = os.path.join(
+_APP_DATA_DIR = os.path.join(
     os.environ.get("APPDATA", os.path.expanduser("~")),
     "LiveStocksTracker",
-    "claude_key.txt",
 )
+
+_CLAUDE_KEY_FILE = os.path.join(_APP_DATA_DIR, "claude_key.txt")
+_WORKSPACE_FILE = os.path.join(_APP_DATA_DIR, "workspace.json")
 
 
 def _load_claude_key() -> str:
@@ -66,9 +70,26 @@ def _load_claude_key() -> str:
 
 
 def _save_claude_key(key: str):
-    os.makedirs(os.path.dirname(_CLAUDE_KEY_FILE), exist_ok=True)
+    os.makedirs(_APP_DATA_DIR, exist_ok=True)
     with open(_CLAUDE_KEY_FILE, "w", encoding="utf-8") as f:
         f.write(key.strip())
+
+
+def _load_workspace() -> dict:
+    try:
+        with open(_WORKSPACE_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            return data
+    except (OSError, json.JSONDecodeError):
+        pass
+    return {}
+
+
+def _save_workspace(data: dict):
+    os.makedirs(_APP_DATA_DIR, exist_ok=True)
+    with open(_WORKSPACE_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f)
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -156,6 +177,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._handle_search(parsed)
         elif parsed.path == "/api/key-status":
             self._json_response(200, {"has_key": bool(_load_claude_key())})
+        elif parsed.path == "/api/local-model-status":
+            self._handle_local_model_status()
+        elif parsed.path == "/api/workspace":
+            self._json_response(200, _load_workspace())
         else:
             super().do_GET()
 
@@ -167,6 +192,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._handle_chat(body)
         elif parsed.path == "/api/save-key":
             self._handle_save_key(body)
+        elif parsed.path == "/api/local-edit":
+            self._handle_local_edit(body)
+        elif parsed.path == "/api/workspace":
+            self._handle_save_workspace(body)
         else:
             self.send_error(404)
 
@@ -216,6 +245,45 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._json_response(400, {"error": f"Invalid form fields: {exc}"})
             return
         self._handle_chat_core(messages, app_source, chart_state, images)
+
+    def _handle_save_workspace(self, body):
+        try:
+            data = json.loads(body)
+        except Exception as exc:
+            self._json_response(400, {"error": f"Invalid JSON: {exc}"})
+            return
+        if not isinstance(data, dict):
+            self._json_response(400, {"error": "Expected JSON object."})
+            return
+        _save_workspace(data)
+        self._json_response(200, {"ok": True})
+
+    def _handle_local_model_status(self):
+        cfg = local_model.load_config()
+        status = local_model.check_ollama_status(cfg)
+        status["enabled"] = cfg.get("enabled", True)
+        self._json_response(200, status)
+
+    def _handle_local_edit(self, body):
+        try:
+            data = json.loads(body)
+        except Exception as exc:
+            self._json_response(400, {"error": f"Invalid JSON: {exc}"})
+            return
+
+        instruction = (data.get("instruction") or "").strip()
+        code = (data.get("code") or "").strip()
+
+        if not instruction:
+            self._json_response(400, {"error": "Missing 'instruction' field."})
+            return
+        if not code:
+            self._json_response(400, {"error": "Missing 'code' field."})
+            return
+
+        result = local_model.apply_edit(instruction, code)
+        status_code = 200 if result.get("ok") else 422
+        self._json_response(status_code, result)
 
     def _handle_save_key(self, body):
         try:
