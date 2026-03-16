@@ -278,7 +278,43 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._json_response(400, {"error": "Missing 'message' field."})
             return
 
-        result = local_model.chat(message)
+        chart_state = data.get("chartState", "")
+        history = data.get("history", [])
+
+        system_prompt = (
+            "You are a stock chart assistant. You control a live charting app.\n\n"
+            "RULE: When asked to DO something, reply with ONLY a JSON code block like this:\n"
+            "```json\n"
+            '{"action":"execute","code":"setChartToLine()"}\n'
+            "```\n\n"
+            "RULE: When asked a QUESTION, reply with plain text. No JSON block.\n\n"
+            "EXAMPLES:\n"
+            '- "switch to line chart" → {"action":"execute","code":"setChartToLine()"}\n'
+            '- "dark mode" → {"action":"execute","code":"enableDarkMode()"}\n'
+            '- "light mode" → {"action":"execute","code":"disableDarkMode()"}\n'
+            '- "show TSLA" → {"action":"execute","code":"openSymbol(\'TSLA\')"}\n'
+            '- "add MSFT tab" → {"action":"execute","code":"addTab(\'MSFT\')"}\n'
+            '- "bookmark this" → {"action":"execute","code":"addBookmark(getActiveTab())"}\n'
+            '- "area chart" → {"action":"execute","code":"setChartToArea()"}\n'
+            '- "candles" → {"action":"execute","code":"setChartToCandles()"}\n'
+            '- "15 min interval" → {"action":"execute","code":"setInterval_(\'15m\')"}\n'
+            '- "heikin ashi" → {"action":"execute","code":"setChartToHeikinAshi()"}\n\n'
+            "AVAILABLE FUNCTIONS (use ONLY these):\n"
+            "Charts: setChartToCandles() setChartToLine() setChartToArea() setChartToOHLC() "
+            "setChartToHeikinAshi() setChartToMountain() setChartToBar() setChartType(name) "
+            "getChartType() render()\n"
+            "Tabs: addTab(sym) removeTab(sym) switchTab(sym) openSymbol(sym) getTabs() "
+            "getActiveTab() closeAllTabs()\n"
+            "Bookmarks: addBookmark(sym) removeBookmark(sym) getBookmarks() clearBookmarks()\n"
+            "Display: enableDarkMode() disableDarkMode() setInterval_('5m')\n"
+            "Advanced: chart.setOption({...}, false) setBuildOption(fn) render()\n"
+        )
+        if chart_state:
+            system_prompt += "\nCurrent state: " + chart_state + "\n"
+
+        result = local_model.chat(
+            message, system_prompt=system_prompt, history=history
+        )
         status_code = 200 if result.get("ok") else 422
         self._json_response(status_code, result)
 

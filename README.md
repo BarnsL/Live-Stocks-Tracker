@@ -1,37 +1,55 @@
 Live Stocks Tracker
 ===================
 
-Version: 2.1 — patch: assistant-driven chart-type toggle (candles ↔ line)
+**Version 3.2.0** — Local AI + Claude unified chat, 7 chart modes, persistent tabs & bookmarks
 
-Lightweight local stock charting app using ECharts and yfinance with a chat-driven UI.
+Lightweight local stock charting app built with ECharts 5, vanilla JS, and a Python backend (yfinance). Features a unified AI chat panel with both a local Ollama model (Qwen 2.5-Coder) and Claude for controlling the chart via natural language.
 
-Features
+## Features
+
+### AI Chat (Local + Claude)
+- Unified chat panel with model selector — switch between **Local Qwen** and **Claude** mid-conversation.
+- Local model runs offline via [Ollama](https://ollama.com/) (no API key needed).
+- Claude integration for more complex requests (requires API key).
+- Both models can execute chart commands: change chart types, open symbols, manage tabs/bookmarks, toggle dark mode, and more.
+
+### Charts
+- **7 chart display modes**: candles, line, area, OHLC, Heikin-Ashi, mountain, bar.
 - Binomial-volume candles: each candle body is split into buy/sell portions and colored separately.
-- Live / cached bar data via `yfinance` (`/api/bars`).
-- Symbol search (`/api/search`) with basic caching.
-- Chat integration: send messages to the backend which forwards to Claude; assistant replies may include JSON/JS blocks that the client safely executes to modify the UI.
-- Replaceable `buildOption(symbol, interval, bars)` at runtime (exposed as `window.buildOption`).
-- Demo runner: `?demo=1` or call `runChatDemo()` in the browser to load a simple line chart.
+- Live/cached bar data via `yfinance`.
+- Multiple intervals: 1m, 5m, 15m, 1h, 1d.
+- Dark mode support.
 
-Security & design notes
-- The server binds to `127.0.0.1` only — do NOT expose this process to the public network.
-- Claude API key is stored locally at `%APPDATA%/LiveStocksTracker/claude_key.txt` (set via the UI or `/api/save-key`).
-- Assistant-sent code runs in the page context. The page exposes a limited set of helper globals (chart, `buildOption`, `render`, color constants, and safe DOM helpers). Review these helpers before enabling remote access.
+### Tabs & Bookmarks
+- Open multiple symbols as tabs for quick switching.
+- Bookmark favorite symbols for persistent access.
+- All state persists across sessions (localStorage + server-side workspace).
 
-Quick start
+### Other
+- Symbol search with caching.
+- Dynamic chart tips and kicker text.
+- Auto-polling with configurable intervals.
+- Server-side workspace persistence (`%APPDATA%\LiveStocksTracker\workspace.json`).
 
-1. Simply run the .exe and a webpage on localhost will open up.
-   
-2. Create Key at https://platform.claude.com/settings/keys.
+## Quick Start
 
-3. Click on chat button at the lower right corner.
+1. Download and run `LiveStocksTracker.exe` — a browser tab opens automatically.
+2. The local AI model works out of the box if [Ollama](https://ollama.com/) is installed with `qwen2.5-coder:1.5b`.
+3. For Claude: create a key at https://console.anthropic.com/settings/keys and enter it in the chat panel.
+4. Click the chat button (lower-right), pick a model, and start chatting.
 
-4. Add API key to upper field in chat.
-   
-5. Chat with the LLM to customize features.
+### Local Model Setup
 
-Extended start
-1. Create and activate a Python 3.11+ virtualenv. Example (Windows PowerShell):
+```bash
+# Install Ollama from https://ollama.com/
+ollama pull qwen2.5-coder:1.5b
+```
+
+The app auto-detects the local model when Ollama is running.
+
+## Development Setup
+
+1. Create and activate a Python 3.11+ virtualenv:
 
 ```powershell
 python -m venv .venv
@@ -39,50 +57,44 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-2. Run the server (the script finds a free port starting at 8080):
+2. Start the server:
 
 ```powershell
 python server.py
 ```
 
-3. Open the URL printed by the server (e.g. http://localhost:8080). The page will auto-open in your default browser.
+3. Opens automatically at http://localhost:8080.
 
-Using the chat assistant
-- Click the chat toggle, save your Claude API key (starts with `sk-`) via the UI, then ask the assistant to change colors, add indicators, or return JS code.
-- To instruct the assistant to run code on the page, it should return a JSON block like:
-
-```json
-```json
-{"action":"execute","code":"/* JavaScript to run in the browser */"}
-```
-```
-
-Developer notes
-- Primary files:
-  - `app.js` — client UI, ECharts option builder, chat integration and safe helpers.
-  - `index.html` / `styles.css` — static UI assets.
-  - `server.py` — minimal Python HTTP server: serves static files, proxies chat to Claude, and serves `/api/bars` and `/api/search`.
-  - `requirements.txt` — Python dependencies used by the server.
-
-- To experiment with assistant-driven UI changes, use the demo (`?demo=1`) or open the browser console and call `window.runChatDemo()`.
-
-Building the v2.1 exe
-- Ensure your working tree includes this patch (updated `app.js`).
-- Build a new executable with PyInstaller using the provided spec:
+## Building the Executable
 
 ```powershell
-pyinstaller build_v2_1.spec
+pyinstaller build.spec --noconfirm
 ```
 
-This produces `dist\LiveStocksTracker_v2.1` containing the patched exe. The original `build.spec` still builds the unversioned exe (v2.0 build name). The source changes are already included in both builds since `app.js` has been modified.
+Produces `dist\LiveStocksTracker.exe`.
 
-Troubleshooting
-- If the assistant reports "No API key configured" save your Claude key in the chat panel or write the key to `%APPDATA%/LiveStocksTracker/claude_key.txt`.
-- If charts look blank, check the server logs for `/api/bars` responses and ensure `yfinance` can fetch the symbol.
+## Project Structure
 
-Contributing / Next steps
-- Add unit tests for `server.py` endpoints.
-- Harden chat handling and sandboxing if deploying the app to multi-user environments.
+| File | Description |
+|------|-------------|
+| `app.js` | Client UI, ECharts chart builder, chat integration, sandbox helpers |
+| `index.html` | Page structure and layout |
+| `styles.css` | Styling with dark mode support |
+| `server.py` | Python HTTP server: static files, yfinance proxy, Claude proxy, local model proxy, workspace API |
+| `local_model.py` | Ollama wrapper for the local Qwen model |
+| `build.spec` | PyInstaller build configuration |
+| `requirements.txt` | Python dependencies |
 
-License
-- (Choose a license or keep proprietary.)
+## Security Notes
+- Server binds to `127.0.0.1` only — not exposed to the network.
+- Claude API key stored locally at `%APPDATA%\LiveStocksTracker\claude_key.txt`.
+- AI-generated code runs in a sandboxed `new Function()` scope with a limited set of helper globals.
+
+## Troubleshooting
+- **"No API key configured"** — Save your Claude key in the chat panel.
+- **Blank chart** — Check server logs for `/api/bars` errors; ensure `yfinance` can fetch the symbol.
+- **Local model not connecting** — Ensure Ollama is running (`ollama serve`) and the model is pulled.
+- **Chat status dot is red** — Ollama is not reachable at `localhost:11434`.
+
+## License
+Proprietary
