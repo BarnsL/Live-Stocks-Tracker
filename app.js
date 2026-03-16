@@ -6,10 +6,10 @@ function disableDarkMode() {
   document.body.classList.remove('dark');
 }
 /* ── constants ── */
-let BUY = "#0d8a57";
-let SELL = "#ca5a18";
-let BUY_WICK = "#0f774d";
-let SELL_WICK = "#a83a20";
+const BUY = "#0d8a57";
+const SELL = "#ca5a18";
+const BUY_WICK = "#0f774d";
+const SELL_WICK = "#a83a20";
 
 /* ── DOM refs ── */
 const chartNode = document.getElementById("chart");
@@ -19,25 +19,165 @@ const refreshButton = document.getElementById("refresh");
 const pollSelect = document.getElementById("poll");
 const pollDot = document.getElementById("poll-indicator");
 const searchResults = document.getElementById("search-results");
+const stockTabsNode = document.getElementById("stock-tabs");
+const addTabButton = document.getElementById("add-tab");
+const bookmarkCurrentButton = document.getElementById("bookmark-current");
+const stockBookmarksNode = document.getElementById("stock-bookmarks");
 const chart = echarts.init(chartNode);
 
-/* ── Safe UI helper functions (available to chatbot-executed code) ── */
-function setCSSVar(name, value) {
-  try { document.documentElement.style.setProperty(name, value); } catch (e) { console.warn('setCSSVar failed', e); }
+/* ── tabs + bookmarks persistence ── */
+const WORKSPACE_KEY = "liveStocks.workspace.v1";
+
+function normalizeSymbol(value) {
+  return (value || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9.^-]/g, "")
+    .slice(0, 15);
 }
 
-function setStyle(selector, prop, value) {
-  try { document.querySelectorAll(selector).forEach(el => el.style.setProperty(prop, value)); } catch (e) { console.warn('setStyle failed', e); }
+function loadWorkspaceState() {
+  try {
+    const raw = localStorage.getItem(WORKSPACE_KEY);
+    if (!raw) return { tabs: ["AAPL"], activeTab: 0, bookmarks: [] };
+    const parsed = JSON.parse(raw);
+    const tabs = Array.isArray(parsed.tabs)
+      ? parsed.tabs.map(normalizeSymbol).filter(Boolean)
+      : [];
+    const bookmarks = Array.isArray(parsed.bookmarks)
+      ? parsed.bookmarks.map(normalizeSymbol).filter(Boolean)
+      : [];
+    const safeTabs = tabs.length ? Array.from(new Set(tabs)) : ["AAPL"];
+    const activeTab = Number.isInteger(parsed.activeTab)
+      ? Math.max(0, Math.min(parsed.activeTab, safeTabs.length - 1))
+      : 0;
+    return {
+      tabs: safeTabs,
+      activeTab,
+      bookmarks: Array.from(new Set(bookmarks)),
+    };
+  } catch {
+    return { tabs: ["AAPL"], activeTab: 0, bookmarks: [] };
+  }
 }
 
-function setThemeColors({ buy, sell, buyWick, sellWick } = {}) {
-  if (buy) BUY = buy;
-  if (sell) SELL = sell;
-  if (buyWick) BUY_WICK = buyWick;
-  if (sellWick) SELL_WICK = sellWick;
-  // Re-render the chart in-place; use silent render to avoid spinner
-  try { render(true); } catch (e) { console.warn('setThemeColors render failed', e); }
+let workspaceState = loadWorkspaceState();
+
+function saveWorkspaceState() {
+  localStorage.setItem(WORKSPACE_KEY, JSON.stringify(workspaceState));
 }
+
+function ensureWorkspaceIntegrity() {
+  if (!workspaceState.tabs.length) {
+    workspaceState.tabs = ["AAPL"];
+    workspaceState.activeTab = 0;
+  }
+  workspaceState.activeTab = Math.max(0, Math.min(workspaceState.activeTab, workspaceState.tabs.length - 1));
+}
+
+function setActiveSymbol(sym, addTabIfMissing = true) {
+  const symbol = normalizeSymbol(sym) || "AAPL";
+  let idx = workspaceState.tabs.indexOf(symbol);
+  if (idx === -1 && addTabIfMissing) {
+    workspaceState.tabs.push(symbol);
+    idx = workspaceState.tabs.length - 1;
+  }
+  if (idx >= 0) workspaceState.activeTab = idx;
+  symbolInput.value = symbol;
+  saveWorkspaceState();
+  renderWorkspaceUI();
+}
+
+function renderWorkspaceUI() {
+  ensureWorkspaceIntegrity();
+
+  stockTabsNode.innerHTML = workspaceState.tabs.map((sym, idx) => {
+    const activeClass = idx === workspaceState.activeTab ? " active" : "";
+    return `<div class="stock-tab${activeClass}" data-tab-idx="${idx}">
+      <button type="button" class="stock-tab-btn" data-open-tab="${idx}">${sym}</button>
+      <button type="button" class="stock-tab-close" data-close-tab="${idx}" title="Close tab">&times;</button>
+    </div>`;
+  }).join("");
+
+  stockTabsNode.querySelectorAll("[data-open-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = Number(btn.dataset.openTab);
+      const sym = workspaceState.tabs[idx];
+      if (!sym) return;
+      workspaceState.activeTab = idx;
+      symbolInput.value = sym;
+      saveWorkspaceState();
+      renderWorkspaceUI();
+      render();
+    });
+  });
+
+  stockTabsNode.querySelectorAll("[data-close-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = Number(btn.dataset.closeTab);
+      if (workspaceState.tabs.length <= 1) return;
+      workspaceState.tabs.splice(idx, 1);
+      if (workspaceState.activeTab >= workspaceState.tabs.length) {
+        workspaceState.activeTab = workspaceState.tabs.length - 1;
+      }
+      if (idx < workspaceState.activeTab) {
+        workspaceState.activeTab -= 1;
+      }
+      ensureWorkspaceIntegrity();
+      symbolInput.value = workspaceState.tabs[workspaceState.activeTab];
+      saveWorkspaceState();
+      renderWorkspaceUI();
+      render();
+    });
+  });
+
+  const activeSymbol = workspaceState.tabs[workspaceState.activeTab] || "AAPL";
+  const isBookmarked = workspaceState.bookmarks.includes(activeSymbol);
+  bookmarkCurrentButton.textContent = isBookmarked ? "Bookmarked" : "Bookmark";
+
+  stockBookmarksNode.innerHTML = workspaceState.bookmarks.map((sym) =>
+    `<div class="stock-bookmark" data-bookmark="${sym}">
+      <button type="button" class="stock-bookmark-btn" data-open-bookmark="${sym}">${sym}</button>
+      <button type="button" class="stock-bookmark-remove" data-remove-bookmark="${sym}" title="Remove bookmark">&times;</button>
+    </div>`
+  ).join("");
+
+  stockBookmarksNode.querySelectorAll("[data-open-bookmark]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const sym = normalizeSymbol(btn.dataset.openBookmark);
+      if (!sym) return;
+      setActiveSymbol(sym, true);
+      render();
+    });
+  });
+
+  stockBookmarksNode.querySelectorAll("[data-remove-bookmark]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const sym = normalizeSymbol(btn.dataset.removeBookmark);
+      workspaceState.bookmarks = workspaceState.bookmarks.filter((x) => x !== sym);
+      saveWorkspaceState();
+      renderWorkspaceUI();
+    });
+  });
+}
+
+addTabButton.addEventListener("click", () => {
+  const sym = normalizeSymbol(symbolInput.value) || "AAPL";
+  setActiveSymbol(sym, true);
+  render();
+});
+
+bookmarkCurrentButton.addEventListener("click", () => {
+  const sym = normalizeSymbol(symbolInput.value) || "AAPL";
+  const existing = workspaceState.bookmarks.indexOf(sym);
+  if (existing >= 0) {
+    workspaceState.bookmarks.splice(existing, 1);
+  } else {
+    workspaceState.bookmarks.push(sym);
+  }
+  workspaceState.bookmarks = Array.from(new Set(workspaceState.bookmarks));
+  saveWorkspaceState();
+  renderWorkspaceUI();
+});
 
 /* ── symbol search ── */
 let searchTimeout = null;
@@ -88,7 +228,7 @@ async function searchSymbols(q) {
 }
 
 function pickSymbol(sym) {
-  symbolInput.value = sym;
+  setActiveSymbol(sym, true);
   closeSearch();
   render();
 }
@@ -354,15 +494,20 @@ function setupPoll() {
 /* silent render for poll — no loading spinner */
 const _origRender = render;
 async function render(silent) {
-  const symbol = symbolInput.value.trim().toUpperCase() || "AAPL";
+  const symbol = normalizeSymbol(symbolInput.value) || "AAPL";
+  symbolInput.value = symbol;
+
+  if (workspaceState.tabs[workspaceState.activeTab] !== symbol) {
+    setActiveSymbol(symbol, true);
+  }
+
   const interval = intervalInput.value;
   if (!silent) chart.showLoading({ text: "Loading…", color: BUY, maskColor: "rgba(250,247,241,.8)" });
   try {
     const bars = await fetchBars(symbol, interval);
     if (!silent) chart.hideLoading();
     if (bars.length) {
-      const optionBuilder = window.buildOption || buildOption;
-      chart.setOption(optionBuilder(symbol, interval, bars), true);
+      chart.setOption(buildOption(symbol, interval, bars), true);
     } else {
       if (!silent) chart.hideLoading();
       console.warn("No data returned for", symbol);
@@ -373,6 +518,7 @@ async function render(silent) {
   }
 }
 
+setActiveSymbol(workspaceState.tabs[workspaceState.activeTab] || "AAPL", true);
 render();
 setupPoll();
 
@@ -597,14 +743,12 @@ async function sendChat() {
               "chart", "echarts", "buildOption", "render",
               "BUY", "SELL", "symbolInput", "intervalInput", "pollSelect", "chartNode",
               "enableDarkMode", "disableDarkMode",
-              "document", "window", "setCSSVar", "setStyle", "setThemeColors",
               action.code
             );
             fn(
               chart, echarts, buildOption, render,
               BUY, SELL, symbolInput, intervalInput, pollSelect, chartNode,
-              enableDarkMode, disableDarkMode,
-              document, window, setCSSVar, setStyle, setThemeColors
+              enableDarkMode, disableDarkMode
             );
             appendMsg("executed", "Code executed successfully.");
           } catch (execErr) {
