@@ -205,12 +205,47 @@ def _clean_output(raw: str) -> str:
 # ── Public API ──
 
 
-def chat(message: str, config_overrides: dict = None) -> dict:
-    """Send a general chat message to the local model (no code editing).
+def _call_ollama_chat(system: str, messages: list, cfg: dict) -> str:
+    """Send a chat request to Ollama /api/chat and return the assistant reply."""
+    base = cfg["endpoint"].rsplit("/api/", 1)[0]
+    chat_url = f"{base}/api/chat"
+
+    payload = json.dumps({
+        "model": cfg["model"],
+        "messages": [{"role": "system", "content": system}] + messages,
+        "stream": False,
+        "options": {
+            "temperature": 0.2,
+            "top_p": 0.9,
+            "num_predict": 4096,
+        },
+    }).encode()
+
+    req = urllib.request.Request(
+        chat_url,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=cfg["timeout"]) as resp:
+            body = json.loads(resp.read().decode())
+            msg = body.get("message", {})
+            return msg.get("content", "")
+    except urllib.error.URLError as e:
+        raise ConnectionError(f"Cannot reach Ollama at {chat_url}: {e}") from e
+    except TimeoutError:
+        raise TimeoutError(f"Ollama request timed out after {cfg['timeout']}s")
+
+
+def chat(message: str, system_prompt: str = None, history: list = None,
+         config_overrides: dict = None) -> dict:
+    """Send a chat message to the local model with optional system prompt and history.
 
     Returns dict with keys:
       ok: bool
-      result: str — model reply
+      reply: str — model reply
       error: str — only if not ok
       duration: float (seconds)
     """
@@ -223,15 +258,16 @@ def chat(message: str, config_overrides: dict = None) -> dict:
 
     if not message or not message.strip():
         return {"ok": False, "error": "Message cannot be empty."}
-    if len(message) > 4000:
-        return {"ok": False, "error": "Message too long (max 4000 chars)."}
 
-    prompt = message.strip()
+    system = system_prompt or "You are a helpful coding assistant."
+    messages = list(history or [])
+    messages.append({"role": "user", "content": message.strip()})
+
     logger.info("Local chat request: message=%r, model=%s", message[:80], cfg["model"])
 
     t0 = time.time()
     try:
-        raw = _call_ollama(prompt, cfg)
+        raw = _call_ollama_chat(system, messages, cfg)
     except (ConnectionError, TimeoutError) as e:
         logger.error("Ollama call failed: %s", e)
         return {"ok": False, "error": str(e)}
@@ -245,7 +281,7 @@ def chat(message: str, config_overrides: dict = None) -> dict:
         return {"ok": False, "error": "Model returned empty response.", "duration": duration}
 
     logger.info("Chat completed in %.1fs, reply_len=%d", duration, len(reply))
-    return {"ok": True, "result": reply, "duration": duration}
+    return {"ok": True, "reply": reply, "duration": duration}
 
 
 def apply_edit(instruction: str, code: str, config_overrides: dict = None) -> dict:
