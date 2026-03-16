@@ -204,6 +204,50 @@ def _clean_output(raw: str) -> str:
 
 # ── Public API ──
 
+
+def chat(message: str, config_overrides: dict = None) -> dict:
+    """Send a general chat message to the local model (no code editing).
+
+    Returns dict with keys:
+      ok: bool
+      result: str — model reply
+      error: str — only if not ok
+      duration: float (seconds)
+    """
+    cfg = load_config()
+    if config_overrides:
+        cfg.update(config_overrides)
+
+    if not cfg.get("enabled", True):
+        return {"ok": False, "error": "Local AI is disabled in configuration."}
+
+    if not message or not message.strip():
+        return {"ok": False, "error": "Message cannot be empty."}
+    if len(message) > 4000:
+        return {"ok": False, "error": "Message too long (max 4000 chars)."}
+
+    prompt = message.strip()
+    logger.info("Local chat request: message=%r, model=%s", message[:80], cfg["model"])
+
+    t0 = time.time()
+    try:
+        raw = _call_ollama(prompt, cfg)
+    except (ConnectionError, TimeoutError) as e:
+        logger.error("Ollama call failed: %s", e)
+        return {"ok": False, "error": str(e)}
+    except Exception as e:
+        logger.error("Unexpected error calling Ollama: %s", e)
+        return {"ok": False, "error": f"Model inference failed: {e}"}
+    duration = time.time() - t0
+
+    reply = raw.strip() if raw else ""
+    if not reply:
+        return {"ok": False, "error": "Model returned empty response.", "duration": duration}
+
+    logger.info("Chat completed in %.1fs, reply_len=%d", duration, len(reply))
+    return {"ok": True, "result": reply, "duration": duration}
+
+
 def apply_edit(instruction: str, code: str, config_overrides: dict = None) -> dict:
     """Run a local model edit request.
 

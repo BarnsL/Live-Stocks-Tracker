@@ -1017,12 +1017,8 @@ async function sendLocalChat(text) {
   const code = _extractCodeFromMessage(text);
   const instruction = text.replace(/```[\w]*\n[\s\S]*?```/g, "").trim();
 
-  if (!instruction) {
-    appendMsg("system", "Send an instruction. Optionally include a code block with ``` fences.");
-    return;
-  }
-  if (!code) {
-    appendMsg("system", "Include a code snippet in ``` fences for the local model to edit.");
+  if (!instruction && !code) {
+    appendMsg("system", "Type a message or question.");
     return;
   }
 
@@ -1033,19 +1029,34 @@ async function sendLocalChat(text) {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 
   try {
-    const res = await fetch("/api/local-edit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ instruction, code }),
-    });
+    let res;
+    if (code && instruction) {
+      // Code editing mode: instruction + code block
+      res = await fetch("/api/local-edit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instruction, code }),
+      });
+    } else {
+      // General chat mode: plain message
+      res = await fetch("/api/local-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text }),
+      });
+    }
     typing.remove();
     const data = await res.json();
 
     if (data.ok) {
       const durStr = data.duration ? " (" + data.duration.toFixed(1) + "s)" : "";
-      appendMsg("assistant", "Here is the edited code" + durStr + ":\n\n```\n" + data.result + "\n```");
+      if (code && instruction) {
+        appendMsg("assistant", "Here is the edited code" + durStr + ":\n\n```\n" + data.result + "\n```");
+      } else {
+        appendMsg("assistant", data.result + durStr);
+      }
     } else {
-      appendMsg("system", data.error || "Local edit failed.");
+      appendMsg("system", data.error || "Local model request failed.");
     }
   } catch (err) {
     typing.remove();
