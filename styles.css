@@ -21,7 +21,6 @@ body.dark .topbar,
 body.dark .controls,
 body.dark .search-bar,
 body.dark .search-box,
-body.dark .search-results,
 body.dark .chart-panel,
 body.dark .notes,
 body.dark .chat-panel,
@@ -35,6 +34,14 @@ body.dark .stock-workspace,
 body.dark .stock-tab,
 body.dark .stock-bookmark {
   background: #23272a !important;
+  color: #e0e0e0 !important;
+  border-color: #444 !important;
+}
+
+/* Search results — separate rule so we can guarantee a fully opaque background
+   that never lets the chart bleed through in dark mode */
+body.dark .search-results {
+  background: #1e2124 !important;
   color: #e0e0e0 !important;
   border-color: #444 !important;
 }
@@ -184,8 +191,10 @@ input[type="text"] {
 }
 
 /* ── Dedicated Search Bar ─────────────────────────── */
+/* z-index ensures the dropdown sits above the chart panel stacking context */
 .search-bar {
   position: relative;
+  z-index: 200;
   margin-top: 14px;
 }
 
@@ -233,6 +242,7 @@ input[type="text"] {
   user-select: none;
 }
 
+/* Solid opaque background + high z-index so results never show chart through them */
 .search-results {
   display: none;
   position: absolute;
@@ -245,7 +255,7 @@ input[type="text"] {
   border: 1px solid var(--line);
   border-radius: 12px;
   margin-top: 6px;
-  z-index: 100;
+  z-index: 300;
   box-shadow: 0 16px 48px rgba(30, 25, 10, 0.22);
 }
 
@@ -443,11 +453,13 @@ button:hover {
   background: rgba(250, 247, 241, 0.84);
 }
 
+/* overflow:hidden clips any tooltip that escapes the confine calculation */
 .chart {
   height: 70vh;
   min-height: 420px;
   max-height: 760px;
   width: 100%;
+  overflow: hidden;
 }
 
 .notes {
