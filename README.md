@@ -1,7 +1,7 @@
 Live Stocks Tracker
 ===================
 
-**Version 3.2.1** — Improved local AI, 1-second live polling, dark/light mode fixes
+**Version 3.3.0** — Mobile UX fixes: chart title/legend overlap, search results opacity, tooltip confinement
 
 Lightweight local stock charting app built with ECharts 5, vanilla JS, and a Python backend (yfinance). Features a unified AI chat panel with both a local Ollama model (Qwen 2.5-Coder) and Claude for controlling the chart via natural language.
 
@@ -26,6 +26,11 @@ Lightweight local stock charting app built with ECharts 5, vanilla JS, and a Pyt
 - Open multiple symbols as tabs for quick switching.
 - Bookmark favorite symbols for persistent access.
 - All state persists across sessions (localStorage + server-side workspace).
+
+### Mobile
+- Chart title text shifts down on small screens so it doesn't overlap the Buy Vol / Sell Vol legend items.
+- Search results dropdown renders at full opacity with elevated z-index — the chart is no longer visible through the results.
+- Tooltip data popup is confined within the chart container and cannot overflow left or right on mobile viewports.
 
 ### Other
 - Symbol search with caching.
