@@ -41,6 +41,9 @@ function disableDarkMode() {
 }
 const darkMode = enableDarkMode;
 const lightMode = disableDarkMode;
+/* ── Mobile detection — true when viewport ≤ 600px (matches CSS breakpoint) ── */
+function _isMobile() { return window.innerWidth <= 600; }
+
 /* ── constants ── */
 const BUY = "#0d8a57";
 const SELL = "#ca5a18";
@@ -374,9 +377,10 @@ function buildOption(symbol, interval, bars) {
   return {
     animation: true,
     animationDuration: 500,
+    /* Title top shifts down on mobile so it doesn't overlap the legend (Buy Vol text) */
     title: {
       text: `${symbol} · ${interval}  —  Binomial Volume Candles`,
-      left: 14, top: 8,
+      left: 14, top: _isMobile() ? 28 : 8,
       textStyle: { fontFamily: "Space Grotesk, sans-serif", fontWeight: 600, fontSize: 14, color: _titleColor() },
     },
     legend: {
@@ -386,6 +390,7 @@ function buildOption(symbol, interval, bars) {
     },
     tooltip: {
       trigger: "axis",
+      confine: true, /* Mobile fix: keep tooltip popup inside the chart container */
       axisPointer: { type: "cross" },
       backgroundColor: "rgba(23,26,21,.92)",
       borderWidth: 0,
@@ -494,7 +499,7 @@ function lineBuildOption(symbol, interval, bars) {
   return {
     animation: true,
     title: { text: `${symbol} · ${interval} — Line`, left: 14, top: 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14, color: _titleColor() } },
-    tooltip: { trigger: 'axis' },
+    tooltip: { trigger: 'axis', confine: true /* keep tooltip inside chart on mobile */ },
     xAxis: { type: 'category', data: times, boundaryGap: false, axisLine: { lineStyle: { color: '#a6ad9d' } }, axisLabel: { fontSize: 10 } },
     yAxis: { scale: true },
     grid: { left: 62, right: 20, top: 56, bottom: 50 },
@@ -510,7 +515,7 @@ function areaBuildOption(symbol, interval, bars) {
   return {
     animation: true,
     title: { text: `${symbol} · ${interval} — Area`, left: 14, top: 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14, color: _titleColor() } },
-    tooltip: { trigger: 'axis' },
+    tooltip: { trigger: 'axis', confine: true },
     xAxis: { type: 'category', data: times, boundaryGap: false, axisLine: { lineStyle: { color: '#a6ad9d' } }, axisLabel: { fontSize: 10 } },
     yAxis: { scale: true, splitLine: { lineStyle: { color: 'rgba(63,71,57,.14)' } } },
     grid: { left: 62, right: 20, top: 56, bottom: 50 },
@@ -527,9 +532,10 @@ function ohlcBuildOption(symbol, interval, bars) {
   const sellVols = bars.map(b => b.sellVolume);
   return {
     animation: true,
-    title: { text: `${symbol} · ${interval} — OHLC`, left: 14, top: 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14, color: _titleColor() } },
+    /* Title top shifts down on mobile so it doesn't overlap the legend */
+    title: { text: `${symbol} · ${interval} — OHLC`, left: 14, top: _isMobile() ? 28 : 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14, color: _titleColor() } },
     legend: { top: 8, right: 14, data: ['Price', 'Buy Vol', 'Sell Vol'] },
-    tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+    tooltip: { trigger: 'axis', confine: true, axisPointer: { type: 'cross' } },
     grid: [{ left: 62, right: 20, top: 56, height: '52%' }, { left: 62, right: 20, top: '66%', height: '24%' }],
     xAxis: [{ type: 'category', data: times, axisLabel: { show: false } }, { type: 'category', gridIndex: 1, data: times, axisLabel: { fontSize: 10 } }],
     yAxis: [{ scale: true }, { gridIndex: 1, splitNumber: 3 }],
@@ -558,9 +564,10 @@ function heikinAshiBuildOption(symbol, interval, bars) {
   const sellVols = bars.map(b => b.sellVolume);
   return {
     animation: true,
-    title: { text: `${symbol} · ${interval} — Heikin-Ashi`, left: 14, top: 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14, color: _titleColor() } },
+    /* Title top shifts down on mobile so it doesn't overlap the legend */
+    title: { text: `${symbol} · ${interval} — Heikin-Ashi`, left: 14, top: _isMobile() ? 28 : 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14, color: _titleColor() } },
     legend: { top: 8, right: 14, data: ['Price', 'Buy Vol', 'Sell Vol'] },
-    tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+    tooltip: { trigger: 'axis', confine: true, axisPointer: { type: 'cross' } },
     grid: [{ left: 62, right: 20, top: 56, height: '52%' }, { left: 62, right: 20, top: '66%', height: '24%' }],
     xAxis: [{ type: 'category', data: times, axisLabel: { show: false } }, { type: 'category', gridIndex: 1, data: times, axisLabel: { fontSize: 10 } }],
     yAxis: [{ scale: true }, { gridIndex: 1, splitNumber: 3 }],
@@ -581,7 +588,7 @@ function mountainBuildOption(symbol, interval, bars) {
   return {
     animation: true,
     title: { text: `${symbol} · ${interval} — Mountain`, left: 14, top: 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14, color: _titleColor() } },
-    tooltip: { trigger: 'axis' },
+    tooltip: { trigger: 'axis', confine: true },
     xAxis: { type: 'category', data: times, boundaryGap: false, axisLabel: { fontSize: 10 } },
     yAxis: { scale: true, min: min * 0.998 },
     grid: { left: 62, right: 20, top: 56, bottom: 50 },
@@ -600,7 +607,7 @@ function barBuildOption(symbol, interval, bars) {
   return {
     animation: true,
     title: { text: `${symbol} · ${interval} — Close Bars`, left: 14, top: 8, textStyle: { fontFamily: 'Space Grotesk', fontWeight: 600, fontSize: 14, color: _titleColor() } },
-    tooltip: { trigger: 'axis' },
+    tooltip: { trigger: 'axis', confine: true },
     xAxis: { type: 'category', data: times, axisLabel: { fontSize: 10 } },
     yAxis: { scale: true },
     grid: { left: 62, right: 20, top: 56, bottom: 50 },

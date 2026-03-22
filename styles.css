@@ -487,6 +487,19 @@ button:hover {
     height: 62vh;
     min-height: 360px;
   }
+
+  /* Mobile fix: search results must be fully opaque and above the chart canvas */
+  .search-results {
+    opacity: 1 !important;
+    background: #fcfaf6 !important;
+    z-index: 200 !important;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  body.dark .search-results {
+    background: #23272a !important;
+  }
 }
 
 /* ── Claude Chat Panel ─────────────────────────────── */
